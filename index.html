@@ -1,0 +1,2742 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="مسار — لوحة متابعة تارجت المناديب">
+<title>مسار — متابعة تارجت المناديب</title>
+</head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#0A0E1A;
+    --surface:#131A2C;
+    --surface-2:#1A2340;
+    --surface-3:#232D52;
+    --border:#2E3A5F;
+    --text:#F3F5FC;
+    --text-dim:#9BA5CC;
+    --text-faint:#6A76A3;
+    --gold:#FFB020;
+    --gold-dim:#4A3512;
+    --green:#2FE6A6;
+    --green-dim:#0E3D33;
+    --red:#FF5C7A;
+    --red-dim:#45182A;
+    --amber:#FFC857;
+    --amber-dim:#4A3712;
+    --blue:#5B8DFF;
+    --blue-dim:#182548;
+    --purple:#B18CFF;
+    --purple-dim:#2A2050;
+    --teal:#2DD4BF;
+    --teal-dim:#123D3A;
+    --pink:#FF7AB8;
+    --pink-dim:#3D1A34;
+    --radius:12px;
+    --radius-sm:8px;
+  }
+
+  *{box-sizing:border-box;}
+  #root-app, #root-app *{font-family:'Cairo',sans-serif;}
+  .num{font-family:'JetBrains Mono','Cairo',monospace;font-feature-settings:"tnum";}
+
+  /* Hard safety net: native form controls (button/input/select/textarea/option) get their own
+     UA default text color unless told otherwise — force a sane fallback here via :where() so
+     this NEVER outranks the specific classes below (.btn, .badge, .pct, .link-btn, etc.). */
+  :where(#root-app) button, :where(#root-app) input, :where(#root-app) select,
+  :where(#root-app) textarea, :where(#root-app) option{
+    color:var(--text);
+    background-color:transparent;
+  }
+  :where(#root-app) select option{ background:var(--surface-2); color:var(--text); }
+  :where(#root-app) input[type=checkbox]{ accent-color:var(--gold); width:15px; height:15px; cursor:pointer; }
+  :where(#root-app) ::placeholder{ color:var(--text-faint); opacity:1; }
+  :where(#root-app) input[type=file]::file-selector-button{
+    background:var(--surface-3); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:6px 12px; margin-left:10px; cursor:pointer; font-family:'Cairo';
+  }
+
+  #root-app{
+    background:
+      radial-gradient(700px 500px at 8% -5%, rgba(91,141,255,.10), transparent 60%),
+      radial-gradient(600px 460px at 100% 0%, rgba(255,176,32,.08), transparent 55%),
+      radial-gradient(800px 600px at 50% 110%, rgba(45,212,191,.07), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    color-scheme:dark;
+    min-height:100vh;
+    padding:22px;
+    direction:rtl;
+    text-align:right;
+    line-height:1.5;
+  }
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:16px;
+    margin-bottom:22px;
+    padding-bottom:18px;
+    border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:42px;height:42px;border-radius:10px;
+    background:linear-gradient(135deg,var(--gold),#B8862A);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:900;font-size:19px;color:#1A1305;
+    flex-shrink:0;
+  }
+  .brand h1{margin:0;font-size:19px;font-weight:800;letter-spacing:.2px;}
+  .brand p{margin:2px 0 0;font-size:12.5px;color:var(--text-dim);}
+
+  .date-control{display:flex;align-items:center;gap:10px;}
+  .date-control label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;}
+  .date-control input[type=date]{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:var(--radius-sm);padding:8px 10px;font-family:'JetBrains Mono';font-size:13px;
+    color-scheme:dark;
+  }
+  .today-btn{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:var(--radius-sm);padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;
+    transition:.15s;
+  }
+  .today-btn:hover{background:var(--surface-3);border-color:var(--gold);}
+
+  /* ---------- KPIs ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:8px;}
+  .kpi-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 18px;position:relative;overflow:hidden;
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .kpi-card:hover{ transform:translateY(-3px); box-shadow:0 10px 28px -12px rgba(0,0,0,.55); border-color:var(--surface-3); }
+  .kpi-card .label{font-size:12px;color:var(--text-dim);margin-bottom:8px;font-weight:600;}
+  .kpi-card .value{font-size:22px;font-weight:700;}
+  .kpi-card .sub{font-size:11.5px;color:var(--text-faint);margin-top:4px;}
+  .kpi-card.accent-gold{border-color:var(--gold-dim);}
+  .kpi-card.accent-gold::before{content:"";position:absolute;top:0;right:0;width:3px;height:100%;background:var(--gold);box-shadow:0 0 12px var(--gold);}
+  .kpi-card.accent-green::before{content:"";position:absolute;top:0;right:0;width:3px;height:100%;background:var(--green);box-shadow:0 0 12px var(--green);}
+  .kpi-card.accent-red::before{content:"";position:absolute;top:0;right:0;width:3px;height:100%;background:var(--red);box-shadow:0 0 12px var(--red);}
+  .kpi-card.pos .value{color:var(--green);}
+  .kpi-card.neg .value{color:var(--red);}
+
+  .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-left:6px;
+    box-shadow:0 0 0 0 rgba(47,230,166,.6); animation:livePulse 1.8s infinite;}
+  @keyframes livePulse{
+    0%{ box-shadow:0 0 0 0 rgba(47,230,166,.55); }
+    70%{ box-shadow:0 0 0 6px rgba(47,230,166,0); }
+    100%{ box-shadow:0 0 0 0 rgba(47,230,166,0); }
+  }
+
+  .logic-note{
+    font-size:12px;color:var(--text-faint);background:var(--surface);border:1px dashed var(--border);
+    border-radius:var(--radius-sm);padding:10px 14px;margin:14px 0 22px;line-height:1.7;
+  }
+  .logic-note b{color:var(--amber);font-weight:700;}
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .tab-btn{
+    background:none;border:none;color:var(--text-dim);padding:10px 6px;font-size:14px;font-weight:700;
+    cursor:pointer;position:relative;top:1px;transition:color .15s ease;
+  }
+  .tab-btn:hover{color:var(--text);}
+  .tab-btn + .tab-btn{margin-right:14px;}
+  .tab-btn.active{color:var(--gold);}
+  .tab-btn.active::after{content:"";position:absolute;bottom:-1px;right:0;left:0;height:2px;background:var(--gold);border-radius:2px;box-shadow:0 0 8px var(--gold);}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .search-input{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:var(--radius-sm);padding:9px 12px;font-size:13px;min-width:220px;transition:border-color .15s ease;
+  }
+  .search-input:focus{outline:none;border-color:var(--gold);}
+  .btn{
+    background:var(--gold);color:#1A1305;border:none;border-radius:var(--radius-sm);
+    padding:9px 16px;font-size:13.5px;font-weight:700;cursor:pointer;transition:transform .12s ease, background .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover{background:#FFC246; transform:translateY(-1px); box-shadow:0 6px 16px -6px rgba(255,176,32,.5);}
+  .btn.secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--border);}
+  .btn.secondary:hover{border-color:var(--gold); box-shadow:none; background:var(--surface-3);}
+  .btn.danger{background:var(--red-dim);color:var(--red);border:1px solid #5A2C2C;}
+  .btn.danger:hover{background:#5A2436; box-shadow:none;}
+  .btn.ghost{background:none;border:1px solid var(--border);color:var(--text-dim);padding:6px 10px;font-size:12.5px;}
+
+  /* ---------- Table ---------- */
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{
+    background:var(--surface-2);color:var(--text-dim);font-weight:700;font-size:12px;
+    padding:11px 14px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;
+  }
+  tbody td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tbody tr{transition:background .12s ease;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface-2);}
+  .rep-name{font-weight:700;}
+  .rep-rank{color:var(--text-faint);font-size:11px;width:22px;display:inline-block;}
+
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:700;}
+  .badge.green{background:var(--green-dim);color:var(--green);}
+  .badge.amber{background:var(--amber-dim);color:var(--amber);}
+  .badge.red{background:var(--red-dim);color:var(--red);}
+  .badge.off{background:var(--surface-3);color:var(--text-faint);}
+  .badge-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+  .achieved-input{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:7px 9px;width:120px;font-size:13px;text-align:center;transition:border-color .15s ease;
+  }
+  .achieved-input:focus{outline:none;border-color:var(--gold);}
+  .achieved-input:disabled{opacity:.5;cursor:not-allowed;}
+
+  .pct{font-weight:700;}
+  .pct.green{color:var(--green);}
+  .pct.amber{color:var(--amber);}
+  .pct.red{color:var(--red);}
+
+  /* racetrack bar */
+  .track{position:relative;width:170px;height:8px;background:var(--surface-3);border-radius:6px;overflow:visible;}
+  .track-fill{position:absolute;top:0;right:0;height:100%;border-radius:6px;transition:width .7s cubic-bezier(.22,1,.36,1);}
+  .track-fill.green{background:linear-gradient(90deg,var(--green),#5CFFC9);box-shadow:0 0 10px rgba(47,230,166,.5);}
+  .track-fill.red{background:linear-gradient(90deg,var(--red),#FF8FA6);box-shadow:0 0 10px rgba(255,92,122,.5);}
+  .track-marker{
+    position:absolute;top:-3px;width:2px;height:14px;background:var(--gold);border-radius:2px;
+  }
+  .track-marker::after{
+    content:"";position:absolute;top:-4px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);
+  }
+
+  .empty-state{padding:60px 20px;text-align:center;color:var(--text-faint);}
+  .empty-state .big{font-size:15px;color:var(--text-dim);margin-bottom:6px;font-weight:700;}
+
+  /* ---------- Reps management ---------- */
+  .rep-row-actions{display:flex;gap:6px;}
+  .icon-btn{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);
+    border-radius:6px;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:13px;
+  }
+  .icon-btn:hover{color:var(--text);border-color:var(--gold);}
+  .icon-btn.del:hover{color:var(--red);border-color:var(--red);}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;
+    z-index:50;padding:16px;
+  }
+  .modal{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    width:100%;max-width:440px;padding:22px;
+  }
+  .modal h3{margin:0 0 16px;font-size:16px;font-weight:800;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12.5px;color:var(--text-dim);margin-bottom:6px;font-weight:600;}
+  .field input, .field textarea, .field select{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:var(--radius-sm);padding:10px 12px;font-size:13.5px;font-family:'Cairo';
+  }
+  .field textarea{font-family:'JetBrains Mono';font-size:12.5px;min-height:110px;resize:vertical;}
+  .field .hint{font-size:11px;color:var(--text-faint);margin-top:5px;}
+  .modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-start;}
+
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--surface-3);border:1px solid var(--gold-dim);color:var(--text);
+    padding:11px 20px;border-radius:30px;font-size:13px;font-weight:600;opacity:0;
+    transition:.25s;pointer-events:none;z-index:60;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ---------- Sheet tab ---------- */
+  .sheet-scroll{width:100%;overflow-x:auto;border-radius:var(--radius);}
+  table.sheet{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:100%;}
+  table.sheet thead th{white-space:nowrap;text-align:center;padding:9px 6px;}
+  table.sheet tbody td{padding:5px;text-align:center;}
+  table.sheet th.col-name, table.sheet td.col-name{
+    position:sticky;right:0;z-index:2;background:var(--surface-2);
+    text-align:right;padding-right:14px;min-width:150px;box-shadow:-6px 0 8px -6px rgba(0,0,0,.5);
+  }
+  table.sheet tbody td.col-name{background:var(--surface);}
+  table.sheet tbody tr:hover td.col-name{background:var(--surface-2);}
+  table.sheet th.col-total, table.sheet td.col-total{
+    position:sticky;left:0;z-index:2;background:var(--surface-2);
+    min-width:118px;box-shadow:6px 0 8px -6px rgba(0,0,0,.5);
+  }
+  table.sheet tbody td.col-total{background:var(--surface);}
+  table.sheet tbody tr:hover td.col-total{background:var(--surface-2);}
+  table.sheet th.today-col{color:var(--gold);}
+  table.sheet td.today-col{background:rgba(217,167,59,.07);}
+  .cell-input{
+    width:52px;background:transparent;border:1px solid transparent;color:var(--text);
+    border-radius:5px;padding:5px 2px;font-size:12px;text-align:center;font-family:'JetBrains Mono';
+  }
+  .cell-input:hover{border-color:var(--border);background:var(--surface-2);}
+  .cell-input:focus{outline:none;border-color:var(--gold);background:var(--surface-2);}
+  .sheet-legend{display:flex;gap:16px;align-items:center;font-size:11.5px;color:var(--text-faint);margin-top:10px;}
+  .sheet-legend .dot{width:9px;height:9px;border-radius:2px;display:inline-block;margin-left:5px;vertical-align:middle;}
+
+  .file-input-wrap{
+    background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--radius-sm);
+    padding:16px;text-align:center;
+  }
+  .file-input-wrap input[type=file]{
+    width:100%;color:var(--text-dim);font-size:12.5px;
+  }
+  .import-results{font-size:13px;line-height:1.8;}
+  .import-results .ok{color:var(--green);font-weight:700;}
+  .import-results .warn{color:var(--amber);font-weight:700;}
+  .unmatched-list{
+    background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:8px 12px;margin-top:6px;font-size:12px;color:var(--text-dim);max-height:110px;overflow-y:auto;
+  }
+  .link-btn{background:none;border:none;color:var(--gold);font-size:12.5px;cursor:pointer;text-decoration:underline;padding:0;}
+
+  /* ---------- Dashboard ---------- */
+  .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .dash-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .dash-card:hover{ transform:translateY(-2px); box-shadow:0 10px 26px -14px rgba(0,0,0,.5); border-color:var(--surface-3); }
+  .dash-card-title{font-weight:800;font-size:14px;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+  .dash-card-sub{font-size:11.5px;color:var(--text-faint);margin-bottom:12px;}
+  .chart-wrap{height:280px;position:relative;}
+  .dash-card.wide{grid-column:1 / -1;}
+  .dash-accent-blue{border-top:3px solid var(--blue);}
+  .dash-accent-purple{border-top:3px solid var(--purple);}
+  .dash-accent-teal{border-top:3px solid var(--teal);}
+  .dash-accent-pink{border-top:3px solid var(--pink);}
+
+  .filter-bar{
+    display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:12px 16px;margin-bottom:16px;
+  }
+  .filter-field{display:flex;flex-direction:column;gap:4px;min-width:190px;}
+  .filter-field label{font-size:11.5px;color:var(--text-dim);font-weight:600;}
+  .filter-field select{
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:8px 10px;font-size:13px;
+  }
+  .filter-field select:focus{outline:none;border-color:var(--gold);}
+
+  @media (max-width:720px){
+    .track{width:100px;}
+    .kpis{grid-template-columns:1fr 1fr;}
+    thead th, tbody td{padding:9px 8px;font-size:12.5px;}
+    .achieved-input{width:90px;}
+  }
+</style>
+
+<div id="root-app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">م</div>
+      <div>
+        <h1>مسار — متابعة تارجت المناديب</h1>
+        <p>الإنجاز اليومي والشهري، وتعويض التأخير تلقائيًا</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:14px;">
+      <div class="date-control">
+        <div>
+          <label>اليوم المعروض</label>
+          <input type="date" id="dateInput"/>
+        </div>
+        <button class="today-btn" id="todayBtn">↺ رجوع لليوم</button>
+      </div>
+      <button class="today-btn" id="adminBtn">🔒 دخول كأدمن</button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-field">
+      <label>تصفية حسب القناة</label>
+      <select id="filterChannelSelect"><option value="">كل القنوات</option></select>
+    </div>
+    <div class="filter-field">
+      <label>تصفية حسب المخزن</label>
+      <select id="filterWarehouseSelect"><option value="">كل المخازن</option></select>
+    </div>
+    <button class="btn ghost" id="clearFiltersBtn" style="display:none;">✕ مسح الفلاتر</button>
+  </div>
+
+  <div id="filterBanner"></div>
+  <div id="adminBanner"></div>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="logic-note" id="logicNote"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="dashboard">لوحة التحكم</button>
+    <button class="tab-btn" data-tab="today">متابعة اليوم</button>
+    <button class="tab-btn" data-tab="monthly">الأداء الشهري</button>
+    <button class="tab-btn" data-tab="sheet">الشيت الشهري</button>
+    <button class="tab-btn" data-tab="geo">التوزيع والقنوات</button>
+    <button class="tab-btn" data-tab="warehouses">المخازن</button>
+    <button class="tab-btn" data-tab="reps">إدارة المناديب</button>
+  </div>
+
+  <div id="tabContent"></div>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var state = {
+    reps: [],
+    warehouses: [],  // [{id, name, monthlyTarget}]
+    daily: {},       // { "YYYY-MM": { repId: { "01": amount, ... } } }
+    dims: {},        // { "YYYY-MM": { "01": {regions:{}, subregions:{}, warehouses:{}, srType:{}, _meta:{updatedAt}} } }
+    orders: {},      // { "YYYY-MM": { "01": { repId: [{o:orderNo, c:customerCode, a:amount}] } } }
+    selectedDate: new Date(),
+    activeTab: 'dashboard',
+    searchToday: '',
+    searchReps: '',
+    searchSheet: '',
+    searchGeo: '',
+    searchWh: '',
+    geoDim: 'regions',
+    whView: 'performance',
+    filterChannel: null,
+    filterWarehouse: null,
+    selectedRepIds: {},
+    isAdmin: false,
+    adminPin: null,       // cached after first read of the shared 'admin_pin' key
+    adminPinChecked: false,
+    loaded: false
+  };
+
+  function uid(){ return 'r' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function ymKey(d){ return d.getFullYear() + '-' + pad2(d.getMonth()+1); }
+  function isoDate(d){ return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()); }
+  function daysInMonth(y,m){ return new Date(y, m, 0).getDate(); } // m is 1-based
+  function fmtMoney(n){
+    n = Math.round(n||0);
+    return n.toLocaleString('en-US');
+  }
+  function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+  function showToast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 1800);
+  }
+
+  // ---------------- Storage ----------------
+  async function loadAll(){
+    try{
+      var r = await window.storage.get('reps', true);
+      state.reps = r && r.value ? JSON.parse(r.value) : [];
+    }catch(e){ state.reps = []; }
+    try{
+      var rw = await window.storage.get('warehouses', true);
+      state.warehouses = rw && rw.value ? JSON.parse(rw.value) : [];
+    }catch(e){ state.warehouses = []; }
+    try{
+      var rp = await window.storage.get('admin_pin', true);
+      state.adminPin = rp && rp.value ? rp.value : null;
+    }catch(e){ state.adminPin = null; }
+    state.adminPinChecked = true;
+    await loadMonth(ymKey(state.selectedDate));
+    await loadDims(ymKey(state.selectedDate));
+    await loadOrders(ymKey(state.selectedDate));
+    state.loaded = true;
+  }
+
+  function simpleHash(str){
+    var hash = 5381;
+    for(var i=0;i<str.length;i++){ hash = (((hash<<5)+hash) + str.charCodeAt(i)) >>> 0; }
+    return hash.toString(16);
+  }
+
+  async function saveAdminPin(pin){
+    try{
+      var hashed = simpleHash(pin);
+      var res = await window.storage.set('admin_pin', hashed, true);
+      if(!res) return {ok:false, error:'الحفظ رجع فاضي من غير سبب واضح'};
+      state.adminPin = hashed;
+      return {ok:true};
+    }catch(e){ return {ok:false, error: (e && e.message) ? e.message : String(e)}; }
+  }
+
+  async function loadMonth(key){
+    if(state.daily[key]) return;
+    try{
+      var r = await window.storage.get('daily:'+key, true);
+      state.daily[key] = r && r.value ? JSON.parse(r.value) : {};
+    }catch(e){
+      state.daily[key] = {};
+    }
+  }
+
+  async function loadDims(key){
+    if(state.dims[key]) return;
+    try{
+      var r = await window.storage.get('dims:'+key, true);
+      state.dims[key] = r && r.value ? JSON.parse(r.value) : {};
+    }catch(e){
+      state.dims[key] = {};
+    }
+  }
+
+  async function saveDims(key){
+    try{
+      var res = await window.storage.set('dims:'+key, JSON.stringify(state.dims[key]||{}), true);
+      if(!res) showToast('حصل خطأ أثناء حفظ بيانات المناطق');
+    }catch(e){ showToast('حصل خطأ أثناء حفظ بيانات المناطق'); }
+  }
+
+  async function saveReps(){
+    try{
+      var res = await window.storage.set('reps', JSON.stringify(state.reps), true);
+      if(!res) showToast('حصل خطأ أثناء الحفظ');
+    }catch(e){ showToast('حصل خطأ أثناء الحفظ'); }
+  }
+
+  async function saveWarehouses(){
+    try{
+      var res = await window.storage.set('warehouses', JSON.stringify(state.warehouses), true);
+      if(!res) showToast('حصل خطأ أثناء حفظ المخازن');
+    }catch(e){ showToast('حصل خطأ أثناء حفظ المخازن'); }
+  }
+
+  async function loadOrders(key){
+    if(state.orders[key]) return;
+    try{
+      var r = await window.storage.get('orders:'+key, true);
+      state.orders[key] = r && r.value ? JSON.parse(r.value) : {};
+    }catch(e){
+      state.orders[key] = {};
+    }
+  }
+
+  async function saveOrders(key){
+    try{
+      var res = await window.storage.set('orders:'+key, JSON.stringify(state.orders[key]||{}), true);
+      if(!res) showToast('حصل خطأ أثناء حفظ تفاصيل الفواتير');
+    }catch(e){ showToast('حصل خطأ أثناء حفظ تفاصيل الفواتير'); }
+  }
+
+  async function saveMonth(key){
+    try{
+      var res = await window.storage.set('daily:'+key, JSON.stringify(state.daily[key]||{}), true);
+      if(!res) showToast('حصل خطأ أثناء حفظ البيانات');
+    }catch(e){ showToast('حصل خطأ أثناء حفظ البيانات'); }
+  }
+
+  var CHANNEL_LABELS = ['سيلز (تليسيلز)', 'أون جراوند', 'التطبيق (بدون مندوب)'];
+  var CHANNEL_SHORT = {'سيلز (تليسيلز)':'سيلز', 'أون جراوند':'أون جراوند', 'التطبيق (بدون مندوب)':'تطبيق'};
+
+  function getKnownWarehouseNames(){
+    var names = {};
+    state.warehouses.forEach(function(w){ names[w.name]=true; });
+    Object.keys(state.dims).forEach(function(ymKeyStr){
+      Object.keys(state.dims[ymKeyStr]||{}).forEach(function(dKey){
+        var dObj = state.dims[ymKeyStr][dKey];
+        if(dObj && dObj.warehouses){ Object.keys(dObj.warehouses).forEach(function(n){ names[n]=true; }); }
+      });
+    });
+    return Object.keys(names).sort();
+  }
+
+  // Reads the warehouse -> region -> channel cross-tab across a day range, with optional
+  // warehouse/channel filters, optionally grouped by 'warehouse' | 'region' | 'channel'.
+  // This single function answers every filter combination the UI needs.
+  function queryCross(y, m, fromDay, toDay, filters, groupBy){
+    filters = filters || {};
+    var ym = y+'-'+pad2(m);
+    var monthObj = state.dims[ym] || {};
+    var groups = {};
+    var total = 0;
+    for(var d=fromDay; d<=toDay; d++){
+      var dObj = monthObj[pad2(d)];
+      if(!dObj || !dObj.cross) continue;
+      for(var wh in dObj.cross){
+        if(filters.warehouse && wh!==filters.warehouse) continue;
+        var regionsObj = dObj.cross[wh];
+        for(var rg in regionsObj){
+          if(filters.region && rg!==filters.region) continue;
+          var chObj = regionsObj[rg];
+          for(var ch in chObj){
+            if(filters.channel && ch!==filters.channel) continue;
+            var amt = chObj[ch];
+            total += amt;
+            if(groupBy==='warehouse') groups[wh] = (groups[wh]||0)+amt;
+            else if(groupBy==='region') groups[rg] = (groups[rg]||0)+amt;
+            else if(groupBy==='channel') groups[ch] = (groups[ch]||0)+amt;
+          }
+        }
+      }
+    }
+    return {total: total, groups: groups};
+  }
+
+  // Rep-level drill-down for a warehouse, region, or subregion: who sold how much inside it,
+  // and through which channel. Built from the per-order log (only covers matched reps —
+  // orders with no matched rep, e.g. app/customer self-orders, are reported separately).
+  function repBreakdownForDim(dimType, dimValue, y, m, fromDay, toDay){
+    var ym = y+'-'+pad2(m);
+    var monthObj = state.orders[ym] || {};
+    var repTotals = {};
+    for(var d=fromDay; d<=toDay; d++){
+      var dayObj = monthObj[pad2(d)];
+      if(!dayObj) continue;
+      for(var repId in dayObj){
+        dayObj[repId].forEach(function(o){
+          var match = (dimType==='warehouse' && o.w===dimValue) ||
+                      (dimType==='region' && o.r===dimValue) ||
+                      (dimType==='subregion' && o.sr===dimValue);
+          if(!match) return;
+          repTotals[repId] = repTotals[repId] || {amount:0, count:0, channels:{}};
+          repTotals[repId].amount += (o.a||0);
+          repTotals[repId].count += 1;
+          repTotals[repId].channels[o.ch] = true;
+        });
+      }
+    }
+    var rows = Object.keys(repTotals).map(function(repId){
+      var rep = state.reps.find(function(r){ return r.id===repId; });
+      return {
+        repId: repId,
+        name: rep ? rep.name : '(مندوب محذوف من القائمة)',
+        amount: repTotals[repId].amount,
+        count: repTotals[repId].count,
+        channels: Object.keys(repTotals[repId].channels).map(function(c){ return CHANNEL_SHORT[c]||c; })
+      };
+    });
+    rows.sort(function(a,b){ return b.amount-a.amount; });
+    return rows;
+  }
+
+  // Whether any global filter is active. Rep achieved figures switch to order-level
+  // reconstruction when true, since the flat daily total can't be sliced by channel/warehouse.
+  function filtersActive(){ return !!(state.filterChannel || state.filterWarehouse); }
+
+  function getFilteredAchieved(repId, y, m, day){
+    if(!filtersActive()) return getAchieved(repId, y, m, day);
+    var list = repOrdersForDay(repId, y, m, day);
+    var sum = 0;
+    list.forEach(function(o){
+      if(state.filterChannel && o.ch!==state.filterChannel) return;
+      if(state.filterWarehouse && o.w!==state.filterWarehouse) return;
+      sum += (o.a||0);
+    });
+    return sum;
+  }
+
+  // ---------------- Calculations ----------------
+  function getAchieved(repId, y, m, day){
+    var key = y+'-'+pad2(m);
+    var monthObj = state.daily[key];
+    if(!monthObj || !monthObj[repId]) return 0;
+    return Number(monthObj[repId][pad2(day)] || 0);
+  }
+
+  async function setAchieved(repId, y, m, day, value){
+    var key = y+'-'+pad2(m);
+    if(!state.daily[key]) state.daily[key] = {};
+    if(!state.daily[key][repId]) state.daily[key][repId] = {};
+    state.daily[key][repId][pad2(day)] = Number(value)||0;
+    await saveMonth(key);
+  }
+
+  function getWarehouseAchieved(whName, y, m, day){
+    if(state.filterChannel){
+      return queryCross(y,m,day,day,{warehouse:whName, channel:state.filterChannel}, null).total;
+    }
+    var ym = y+'-'+pad2(m);
+    var dayObj = state.dims[ym] && state.dims[ym][pad2(day)];
+    return (dayObj && dayObj.warehouses && dayObj.warehouses[whName]) || 0;
+  }
+
+  function isFriday(y,m,d){ return new Date(y, m-1, d).getDay()===5; }
+  function workingDaysInMonth(y,m){
+    var dim = daysInMonth(y,m), c=0;
+    for(var d=1; d<=dim; d++){ if(!isFriday(y,m,d)) c++; }
+    return c;
+  }
+  function workingDaysElapsed(y,m,uptoDay){
+    var c=0;
+    for(var d=1; d<=uptoDay; d++){ if(!isFriday(y,m,d)) c++; }
+    return c;
+  }
+  function workingDaysRemainingFrom(y,m,fromDay){
+    var dim = daysInMonth(y,m), c=0;
+    for(var d=fromDay; d<=dim; d++){ if(!isFriday(y,m,d)) c++; }
+    return c;
+  }
+
+  function cumulativeSum(getFn, uptoDay){
+    var s=0;
+    for(var d=1; d<=uptoDay; d++) s += (getFn(d)||0);
+    return s;
+  }
+
+  function cumulativeActual(repId, y, m, uptoDayInclusive){
+    return cumulativeSum(function(d){ return getAchieved(repId,y,m,d); }, uptoDayInclusive);
+  }
+
+  function warehouseCumulative(whName, y, m, uptoDayInclusive){
+    return cumulativeSum(function(d){ return getWarehouseAchieved(whName,y,m,d); }, uptoDayInclusive);
+  }
+
+  // Target for a single working day (Friday excluded from the divisor — no target expected on Fridays,
+  // but any sales that do happen on a Friday still count in actuals).
+  function originalDailyTargetGeneric(monthlyTarget, y, m){
+    var wd = workingDaysInMonth(y,m);
+    return wd>0 ? (monthlyTarget||0)/wd : 0;
+  }
+  function originalDailyTarget(rep, y, m){ return originalDailyTargetGeneric(rep.monthlyTarget, y, m); }
+
+  // Adjusted target for `day`: spreads (target - actual achieved before this day) equally across the
+  // remaining WORKING days (this day through end of month, Fridays excluded). Fridays themselves get 0.
+  function adjustedTargetForDayGeneric(monthlyTarget, getFn, y, m, day){
+    if(isFriday(y,m,day)) return 0;
+    var remainingWorking = workingDaysRemainingFrom(y,m,day);
+    if(remainingWorking<=0) return 0;
+    var actualBefore = cumulativeSum(getFn, day-1);
+    return ((monthlyTarget||0) - actualBefore) / remainingWorking;
+  }
+  function adjustedTargetForDay(rep, y, m, day){
+    return adjustedTargetForDayGeneric(rep.monthlyTarget, function(d){ return getFilteredAchieved(rep.id,y,m,d); }, y, m, day);
+  }
+  function adjustedWarehouseTargetForDay(wh, y, m, day){
+    return adjustedTargetForDayGeneric(wh.monthlyTarget, function(d){ return getWarehouseAchieved(wh.name,y,m,d); }, y, m, day);
+  }
+
+  // Full monthly stats bundle: expected-to-date (working-day pro-rata), variance, % achieved,
+  // and a run-rate projection for month-end if the current pace continues.
+  function monthlyStatsGeneric(monthlyTarget, getFn, y, m, day){
+    var wdElapsed = workingDaysElapsed(y,m,day);
+    var wdTotal = workingDaysInMonth(y,m);
+    var actualToDate = cumulativeSum(getFn, day);
+    var expectedToDate = wdTotal>0 ? (monthlyTarget/wdTotal)*wdElapsed : 0;
+    var variance = actualToDate - expectedToDate;
+    var pct = expectedToDate>0 ? (actualToDate/expectedToDate*100) : (actualToDate>0?100:0);
+    var monthPct = monthlyTarget>0 ? (actualToDate/monthlyTarget*100) : 0;
+    var projected = wdElapsed>0 ? (actualToDate/wdElapsed)*wdTotal : 0;
+    return {dim: daysInMonth(y,m), target: monthlyTarget, actualToDate: actualToDate, expectedToDate: expectedToDate,
+      variance: variance, pct: pct, monthPct: monthPct, projected: projected, wdElapsed: wdElapsed, wdTotal: wdTotal};
+  }
+  function repMonthlyStats(rep, y, m, day){
+    return monthlyStatsGeneric(rep.monthlyTarget||0, function(d){ return getFilteredAchieved(rep.id,y,m,d); }, y, m, day);
+  }
+  function warehouseMonthlyStats(wh, y, m, day){
+    return monthlyStatsGeneric(wh.monthlyTarget||0, function(d){ return getWarehouseAchieved(wh.name,y,m,d); }, y, m, day);
+  }
+
+  function statusForPct(pct){
+    if(pct >= 100) return 'green';
+    if(pct >= 85) return 'amber';
+    return 'red';
+  }
+
+  function repOrdersForDay(repId, y, m, day){
+    var ym = y+'-'+pad2(m);
+    var dayObj = state.orders[ym] && state.orders[ym][pad2(day)];
+    return (dayObj && dayObj[repId]) || [];
+  }
+  function repOrdersToDate(repId, y, m, uptoDay){
+    var all = [];
+    for(var d=1; d<=uptoDay; d++){ all = all.concat(repOrdersForDay(repId,y,m,d)); }
+    return all;
+  }
+  function summarizeOrders(list){
+    var customers = {}, total = 0;
+    list.forEach(function(o){ customers[o.c]=true; total += (o.a||0); });
+    return {invoiceCount: list.length, customerCount: Object.keys(customers).length, total: total};
+  }
+
+  // ---------------- Rendering ----------------
+  function render(){
+    if(!state.loaded){
+      document.getElementById('tabContent').innerHTML = '<div class="empty-state"><div class="big">جاري تحميل البيانات...</div></div>';
+      return;
+    }
+    var d = state.selectedDate;
+    var y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+
+    renderFilterOptions();
+    renderFilterBanner();
+    renderAdminBanner();
+    renderKPIs(y,m,day);
+    renderLogicNote();
+
+    if(state.activeTab==='dashboard') renderDashboardTab(y,m,day);
+    else if(state.activeTab==='today') renderTodayTab(y,m,day);
+    else if(state.activeTab==='monthly') renderMonthlyTab(y,m,day);
+    else if(state.activeTab==='sheet') renderSheetTab(y,m,day);
+    else if(state.activeTab==='geo') renderGeoTab(y,m,day);
+    else if(state.activeTab==='warehouses') renderWarehousesTab(y,m,day);
+    else renderRepsTab();
+  }
+
+  function renderFilterOptions(){
+    var chSel = document.getElementById('filterChannelSelect');
+    var whSel = document.getElementById('filterWarehouseSelect');
+    if(!chSel || !whSel) return;
+
+    if(chSel.getAttribute('data-built')!=='1'){
+      CHANNEL_LABELS.forEach(function(lbl){
+        var opt = document.createElement('option');
+        opt.value = lbl; opt.textContent = CHANNEL_SHORT[lbl] || lbl;
+        chSel.appendChild(opt);
+      });
+      chSel.setAttribute('data-built','1');
+      chSel.addEventListener('change', function(){
+        state.filterChannel = chSel.value || null;
+        render();
+      });
+    }
+    chSel.value = state.filterChannel || '';
+
+    var whNames = getKnownWarehouseNames();
+    var currentOptVals = Array.prototype.map.call(whSel.options, function(o){ return o.value; }).join('|');
+    var wantedVals = [''].concat(whNames).join('|');
+    if(currentOptVals !== wantedVals){
+      whSel.innerHTML = '<option value="">كل المخازن</option>';
+      whNames.forEach(function(n){
+        var opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        whSel.appendChild(opt);
+      });
+      whSel.addEventListener('change', function(){
+        state.filterWarehouse = whSel.value || null;
+        render();
+      });
+    }
+    whSel.value = state.filterWarehouse || '';
+
+    var clearBtn = document.getElementById('clearFiltersBtn');
+    if(clearBtn){
+      clearBtn.style.display = filtersActive() ? 'inline-flex' : 'none';
+      clearBtn.onclick = function(){
+        state.filterChannel = null; state.filterWarehouse = null;
+        render();
+      };
+    }
+  }
+
+  function renderAdminBanner(){
+    var btn = document.getElementById('adminBtn');
+    var box = document.getElementById('adminBanner');
+    if(btn){
+      btn.textContent = state.isAdmin ? '🔓 وضع الأدمن — خروج' : '🔒 دخول كأدمن';
+      btn.onclick = state.isAdmin ? function(){
+        state.isAdmin = false;
+        showToast('خرجت من وضع الأدمن');
+        render();
+      } : openAdminLoginModal;
+    }
+    if(!box) return;
+    if(state.isAdmin){
+      box.innerHTML = '<div class="logic-note" style="border-color:var(--green);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'+
+        '<span>🔓 إنت داخل كأدمن — تقدر تضيف/تعدّل/تحذف المناديب والمخازن وترفع بيانات محقق جديدة.</span>'+
+        '<button class="btn secondary" id="exportSnapshotBtn" style="white-space:nowrap;">📤 تصدير نسخة للمشاركة</button>'+
+      '</div>';
+      var exportBtn = document.getElementById('exportSnapshotBtn');
+      if(exportBtn) exportBtn.addEventListener('click', exportShareableSnapshot);
+    } else if(!state.adminPin){
+      box.innerHTML = '<div class="logic-note" style="border-color:var(--amber);margin-bottom:16px;">'+
+        '⚠️ لسه معملتش كلمة سر للأدمن — أي حد يفتح اللينك ده دلوقتي يقدر يعدّل الداتا. اعمل "دخول كأدمن" فوق واختار كلمة سر الأول قبل ما تبعت اللينك لحد.'+
+      '</div>';
+    } else {
+      box.innerHTML = '<div class="logic-note" style="margin-bottom:16px;">'+
+        '👁 إنت بتشوف التقرير في وضع العرض فقط — مقدرش تضيف أو تعدّل أو تحذف حاجة. لو إنت الأدمن، اضغط "دخول كأدمن" فوق وادخل كلمة السر.'+
+      '</div>';
+    }
+  }
+
+  function exportShareableSnapshot(){
+    var d = state.selectedDate;
+    var y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+    var nowStr = new Date().toLocaleString('ar-EG', {dateStyle:'medium', timeStyle:'short'});
+
+    var kpisHtml = document.getElementById('kpis') ? document.getElementById('kpis').outerHTML : '';
+
+    var todayRows = state.reps.map(function(rep){
+      var orig = originalDailyTarget(rep,y,m);
+      var adj = adjustedTargetForDay(rep,y,m,day);
+      var achieved = getFilteredAchieved(rep.id,y,m,day);
+      var isFri = isFriday(y,m,day);
+      var pct = isFri ? null : (adj>0 ? achieved/adj*100 : (achieved>0?100:0));
+      var st = isFri ? 'off' : statusForPct(pct);
+      return {rep, orig, adj, achieved, pct, st};
+    }).sort(function(a,b){ return (a.adj-a.achieved) - (b.adj-b.achieved) < 0 ? 1 : -1; });
+
+    var todayTableHtml = '<div class="table-wrap"><table><thead><tr><th>#</th><th>المندوب</th><th>تارجت اليوم</th><th>التارجت المعدَّل</th><th>المحقق</th><th>النسبة</th><th>الحالة</th></tr></thead><tbody>'+
+      todayRows.map(function(r,i){
+        return '<tr><td>'+(i+1)+'</td><td class="rep-name">'+escapeHtml(r.rep.name)+'</td><td class="num">'+fmtMoney(r.orig)+' ج.م</td><td class="num">'+(isFriday(y,m,day)?'—':fmtMoney(r.adj)+' ج.م')+'</td><td class="num">'+fmtMoney(r.achieved)+' ج.م</td><td class="pct '+(r.st==='off'?'':r.st)+'">'+(r.pct==null?'—':r.pct.toFixed(0)+'%')+'</td><td>'+badge(r.st)+'</td></tr>';
+      }).join('')+
+    '</tbody></table></div>';
+
+    var monthRows = state.reps.map(function(rep){ return {rep, s: repMonthlyStats(rep,y,m,day)}; }).sort(function(a,b){ return a.s.monthPct - b.s.monthPct; });
+    var monthTableHtml = '<div class="table-wrap"><table><thead><tr><th>المندوب</th><th>التارجت الشهري</th><th>المفروض لحد النهاردة</th><th>المحقق</th><th>الفرق</th><th>النسبة</th><th>المتوقع آخر الشهر</th></tr></thead><tbody>'+
+      monthRows.map(function(r){
+        var s=r.s; var st=statusForPct(s.pct); var projPct = s.target>0 ? (s.projected/s.target*100) : 0;
+        return '<tr><td class="rep-name">'+escapeHtml(r.rep.name)+'</td><td class="num">'+fmtMoney(s.target)+' ج.م</td><td class="num">'+fmtMoney(s.expectedToDate)+' ج.م</td><td class="num">'+fmtMoney(s.actualToDate)+' ج.م</td><td class="num pct '+(s.variance>=0?'green':'red')+'">'+(s.variance>=0?'+':'−')+fmtMoney(Math.abs(s.variance))+'</td><td class="pct '+st+'">'+s.monthPct.toFixed(0)+'%</td><td class="num">'+fmtMoney(s.projected)+' ج.م ('+projPct.toFixed(0)+'%)</td></tr>';
+      }).join('')+
+    '</tbody></table></div>';
+
+    var whRows = state.warehouses.map(function(wh){
+      var s = warehouseMonthlyStats(wh,y,m,day);
+      var chanQ = queryCross(y,m,1,day,{warehouse:wh.name, channel:null},'channel');
+      return {wh, s, channels: chanQ.groups};
+    }).sort(function(a,b){ return a.s.monthPct - b.s.monthPct; });
+
+    var regionGroups={}; var groupOrder=['القاهرة','الجيزة','الدلتا (باقي المخازن)'];
+    groupOrder.forEach(function(g){ regionGroups[g]={target:0, actual:0, count:0}; });
+    whRows.forEach(function(r){ var g=classifyWarehouseRegion(r.wh.name); regionGroups[g].target+=r.s.target; regionGroups[g].actual+=r.s.actualToDate; regionGroups[g].count+=1; });
+    var regionCardsHtml = '<div class="kpis" style="margin-bottom:16px;">'+
+      groupOrder.filter(function(g){ return regionGroups[g].count>0; }).map(function(g){
+        var rg=regionGroups[g]; var pct = rg.target>0 ? (rg.actual/rg.target*100) : 0;
+        return kpiCard(g+' — '+rg.count+' مخزن', fmtMoney(rg.actual)+' ج.م', 'من تارجت '+fmtMoney(rg.target)+' ج.م ('+pct.toFixed(0)+'%)', pct>=100?'accent-green pos':'accent-red neg');
+      }).join('')+
+    '</div>';
+
+    var whTableHtml = '<div class="table-wrap"><table><thead><tr><th>المخزن</th><th>التارجت</th><th>المحقق</th><th>سيلز</th><th>أون جراوند</th><th>تطبيق</th><th>النسبة</th></tr></thead><tbody>'+
+      whRows.map(function(r){
+        var s=r.s; var st=statusForPct(s.pct);
+        return '<tr><td class="rep-name">'+escapeHtml(r.wh.name)+'</td><td class="num">'+fmtMoney(s.target)+' ج.م</td><td class="num">'+fmtMoney(s.actualToDate)+' ج.م</td><td class="num">'+fmtMoney(r.channels['سيلز (تليسيلز)']||0)+'</td><td class="num">'+fmtMoney(r.channels['أون جراوند']||0)+'</td><td class="num">'+fmtMoney(r.channels['التطبيق (بدون مندوب)']||0)+'</td><td class="pct '+st+'">'+s.monthPct.toFixed(0)+'%</td></tr>';
+      }).join('')+
+    '</tbody></table></div>';
+
+    var styleTag = document.querySelector('style') ? document.querySelector('style').outerHTML : '';
+
+    var docHtml = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تقرير مسار — نسخة ثابتة '+isoDate(state.selectedDate)+'</title>'+styleTag+'</head><body>'+
+      '<div id="root-app">'+
+        '<div class="topbar"><div class="brand"><div class="brand-mark">م</div><div><h1>مسار — نسخة تقرير ثابتة</h1><p>معروض ليوم '+isoDate(state.selectedDate)+' — اتصدرت بتاريخ '+nowStr+'</p></div></div></div>'+
+        '<div class="logic-note" style="border-color:var(--amber);">📌 دي نسخة ثابتة من التقرير وقت التصدير — مش هتتحدث تلقائيًا ومفيهاش أي إمكانية تعديل. لو محتاج أرقام أحدث، اطلب من الأدمن يصدّر نسخة جديدة.</div>'+
+        kpisHtml +
+        '<h2 style="margin:26px 0 10px;font-size:16px;">متابعة اليوم</h2>' + todayTableHtml +
+        '<h2 style="margin:26px 0 10px;font-size:16px;">الأداء الشهري</h2>' + monthTableHtml +
+        (whRows.length>0 ? ('<h2 style="margin:26px 0 10px;font-size:16px;">المخازن</h2>' + regionCardsHtml + whTableHtml) : '') +
+      '</div>'+
+    '</body></html>';
+
+    var blob = new Blob([docHtml], {type:'text/html;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'تقرير-مسار-'+isoDate(state.selectedDate)+'.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showToast('اتصدرت نسخة التقرير — جاهزة للمشاركة');
+  }
+
+  function openAdminLoginModal(){
+    var root = document.getElementById('modalRoot');
+    var isSetup = !state.adminPin;
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal">'+
+        '<h3>'+(isSetup ? 'إعداد كلمة سر الأدمن' : 'دخول كأدمن')+'</h3>'+
+        (isSetup
+          ? '<div class="hint" style="margin-bottom:14px;">دي أول مرة بيتفتح فيها الملف — اختار كلمة سر هتستخدمها إنت بس علشان تدخل وضع التعديل. أي حد تاني هيفتح اللينك هيشوف التقرير بس من غير ما يقدر يعدّل.</div>'
+          : '')+
+        '<div class="field"><label>كلمة السر</label><input id="adminPinInput" type="password" placeholder="••••"/></div>'+
+        (isSetup ? '<div class="field"><label>تأكيد كلمة السر</label><input id="adminPinConfirm" type="password" placeholder="••••"/></div>' : '')+
+        '<div id="adminModalError" style="color:var(--red);font-size:12.5px;margin-bottom:6px;"></div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn" id="adminSubmitBtn">'+(isSetup?'حفظ وتفعيل':'دخول')+'</button>'+
+          '<button class="btn secondary" id="adminCancelBtn">إلغاء</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+    document.getElementById('adminCancelBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+
+    document.getElementById('adminSubmitBtn').addEventListener('click', async function(){
+      var pin = document.getElementById('adminPinInput').value;
+      var errBox = document.getElementById('adminModalError');
+      if(!pin){ errBox.textContent = 'اكتب كلمة سر'; return; }
+      if(isSetup){
+        var confirm2 = document.getElementById('adminPinConfirm').value;
+        if(pin!==confirm2){ errBox.textContent = 'كلمة السر مش متطابقة'; return; }
+        errBox.textContent = 'جاري الحفظ...';
+        var result = await saveAdminPin(pin);
+        if(!result.ok){ errBox.textContent = 'حصل خطأ أثناء الحفظ: '+result.error; return; }
+        state.isAdmin = true;
+        closeModal();
+        render();
+        showToast('اتفعّل وضع الأدمن');
+      } else {
+        if(simpleHash(pin)===state.adminPin){
+          state.isAdmin = true;
+          closeModal();
+          render();
+          showToast('أهلاً يا أدمن');
+        } else {
+          errBox.textContent = 'كلمة السر غلط';
+        }
+      }
+    });
+  }
+
+  function renderFilterBanner(){
+    var box = document.getElementById('filterBanner');
+    if(!box) return;
+    if(!filtersActive()){ box.innerHTML = ''; return; }
+    var parts = [];
+    if(state.filterChannel) parts.push('القناة: <b style="color:var(--text);">'+escapeHtml(CHANNEL_SHORT[state.filterChannel]||state.filterChannel)+'</b>');
+    if(state.filterWarehouse) parts.push('المخزن: <b style="color:var(--text);">'+escapeHtml(state.filterWarehouse)+'</b>');
+    box.innerHTML = '<div class="logic-note" style="border-color:var(--blue);margin-bottom:16px;">'+
+      '🔍 الفلاتر شغالة الآن — '+parts.join(' · ')+
+      '. الأرقام في كل التابات دلوقتي بتعكس التصفية دي. الفلترة بتعتمد على تفاصيل الأوردرات من تقارير المبيعات المرفوعة — أي محقق مُدخل يدويًا أو من شيت بسيط (اسم+أرقام أيام) مش هيظهر وقت الفلترة.'+
+    '</div>';
+  }
+
+  function renderLogicNote(){
+    document.getElementById('logicNote').innerHTML =
+      '<b>طريقة الحساب:</b> التارجت الأصلي = التارجت الشهري ÷ أيام العمل في الشهر <b style="color:var(--text-dim);">(الجمعة مستثناة من التارجت، لكن أي بيع يوم جمعة بيتحسب في المحقق عادي)</b>. ' +
+      '<b>التارجت المعدَّل لليوم</b> = (التارجت الشهري − المحقق فعليًا حتى أمس) ÷ أيام العمل المتبقية. ' +
+      'يعني أي مندوب أو مخزن متأخر، اليوم الجديد بيتحسبله تارجت أعلى تلقائيًا علشان يعوض الفرق على باقي أيام الشهر.';
+  }
+
+  function latestDayWithData(y,m){
+    var ym = y+'-'+pad2(m);
+    var monthObj = state.daily[ym];
+    if(!monthObj) return null;
+    var maxDay = null;
+    Object.keys(monthObj).forEach(function(repId){
+      Object.keys(monthObj[repId]||{}).forEach(function(dayKey){
+        if(Number(monthObj[repId][dayKey])>0){
+          var dnum = Number(dayKey);
+          if(maxDay===null || dnum>maxDay) maxDay = dnum;
+        }
+      });
+    });
+    return maxDay;
+  }
+
+  function jumpToDay(y,m,day){
+    state.selectedDate = new Date(y, m-1, day);
+    var dateInput = document.getElementById('dateInput');
+    if(dateInput) dateInput.value = isoDate(state.selectedDate);
+    Promise.resolve()
+      .then(function(){ return loadMonth(ymKey(state.selectedDate)); })
+      .then(function(){ return loadDims(ymKey(state.selectedDate)); })
+      .then(function(){ return loadOrders(ymKey(state.selectedDate)); })
+      .then(function(){ render(); });
+  }
+
+  function noDataTodayBanner(y,m,day){
+    var todaySum = 0;
+    state.reps.forEach(function(rep){ todaySum += getAchieved(rep.id,y,m,day); });
+    if(todaySum>0 || state.reps.length===0) return '';
+    var latest = latestDayWithData(y,m);
+    if(latest===null || latest===day) return '';
+    return '<div class="logic-note" style="border-color:var(--gold-dim);margin:0 0 14px;">'+
+      '⚠️ معندناش بيانات محقق ليوم <b>'+day+'</b> من الشهر ده — آخر يوم اتسجل له بيانات كان يوم <b>'+latest+'</b>. '+
+      'لو النهاردة فعلاً '+day+' ولسه ما رفعتش شيت اليوم، ده طبيعي. لو عايز تشوف آخر بيانات مسجلة: '+
+      '<button class="link-btn" id="jumpToLatestDayBtn" type="button" style="font-weight:700;">اعرض يوم '+latest+'</button>'+
+    '</div>';
+  }
+
+  function renderKPIs(y,m,day){
+    var totalTarget=0, totalActual=0, totalExpected=0;
+    state.reps.forEach(function(rep){
+      var s = repMonthlyStats(rep,y,m,day);
+      totalTarget += s.target;
+      totalActual += s.actualToDate;
+      totalExpected += s.expectedToDate;
+    });
+    var variance = totalActual - totalExpected;
+    var teamPct = totalExpected>0 ? (totalActual/totalExpected*100) : 0;
+    var monthProgressPct = totalTarget>0 ? (totalActual/totalTarget*100) : 0;
+
+    var el = document.getElementById('kpis');
+    el.innerHTML =
+      kpiCard('التارجت الشهري الإجمالي', fmtMoney(totalTarget)+' ج.م', state.reps.length+' مندوب', '') +
+      kpiCard('المحقق حتى '+isoDate(state.selectedDate), fmtMoney(totalActual)+' ج.م', 'من إجمالي المحقق الشهري '+monthProgressPct.toFixed(0)+'%', 'accent-gold') +
+      kpiCard('المفروض تحقيقه لحد النهاردة', fmtMoney(totalExpected)+' ج.م', 'بالتوزيع المتساوي على الأيام', '') +
+      kpiCard((variance>=0?'فائض عن المطلوب':'عجز عن المطلوب'), (variance>=0?'+':'−')+fmtMoney(Math.abs(variance))+' ج.م', 'نسبة الإنجاز الحالية '+teamPct.toFixed(0)+'%', (variance>=0?'accent-green pos':'accent-red neg'));
+  }
+
+  function kpiCard(label,value,sub,cls){
+    return '<div class="kpi-card '+cls+'">'+
+      '<div class="label">'+label+'</div>'+
+      '<div class="value num">'+value+'</div>'+
+      '<div class="sub">'+sub+'</div>'+
+    '</div>';
+  }
+
+  function ensureChart(canvasId, config){
+    if(!window.__charts) window.__charts = {};
+    if(window.__charts[canvasId]){ try{ window.__charts[canvasId].destroy(); }catch(e){} }
+    var canvas = document.getElementById(canvasId);
+    if(!canvas) return;
+    window.__charts[canvasId] = new Chart(canvas.getContext('2d'), config);
+  }
+
+  function renderDashboardTab(y,m,day){
+    var hasAnyData = state.reps.length>0 || state.warehouses.length>0;
+    if(!hasAnyData){
+      document.getElementById('tabContent').innerHTML = emptyState(
+        'لوحة التحكم فاضية لسه',
+        'ضيف المناديب والمخازن، وارفع تقرير المبيعات، وهنا هتلاقي نظرة شاملة على أداء اليوم بالرسم البياني.'
+      );
+      return;
+    }
+    if(typeof Chart === 'undefined'){
+      document.getElementById('tabContent').innerHTML = emptyState('تعذر تحميل مكتبة الرسم البياني', 'تأكد إن جهازك متصل بالإنترنت وأعد تحميل الصفحة.');
+      return;
+    }
+
+    var html = noDataTodayBanner(y,m,day) + '<div class="dash-grid">'+
+      '<div class="dash-card dash-accent-blue"><div class="dash-card-title">🎯 أداء المناديب النهاردة</div>'+
+        '<div class="dash-card-sub">التارجت المعدَّل مقابل المحقق — أعلى 12 مندوب بالمحقق</div>'+
+        '<div class="chart-wrap"><canvas id="chartReps"></canvas></div></div>'+
+      '<div class="dash-card dash-accent-purple"><div class="dash-card-title">🏭 حالة المخازن الشهرية</div>'+
+        '<div class="dash-card-sub">نسبة الإنجاز الشهري لكل مخزن</div>'+
+        '<div class="chart-wrap"><canvas id="chartWh"></canvas></div></div>'+
+      '<div class="dash-card dash-accent-teal"><div class="dash-card-title">📍 أعلى المناطق النهاردة</div>'+
+        '<div class="dash-card-sub">حسب Region — من آخر تقرير مبيعات مرفوع</div>'+
+        '<div class="chart-wrap"><canvas id="chartRegions"></canvas></div></div>'+
+      '<div class="dash-card dash-accent-pink"><div class="dash-card-title">📡 توزيع قنوات البيع النهاردة</div>'+
+        '<div class="dash-card-sub">سيلز / أون جراوند / تطبيق</div>'+
+        '<div class="chart-wrap"><canvas id="chartChannels"></canvas></div></div>'+
+    '</div>';
+    document.getElementById('tabContent').innerHTML = html;
+
+    var jumpBtnD = document.getElementById('jumpToLatestDayBtn');
+    if(jumpBtnD){ jumpBtnD.addEventListener('click', function(){ jumpToDay(y,m,Number(jumpBtnD.textContent.match(/\d+/)[0])); }); }
+
+    var textDim = getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim() || '#9BA5CC';
+    var textMain = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#F3F5FC';
+    var gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#2E3A5F';
+    Chart.defaults.font.family = "'Cairo', sans-serif";
+    Chart.defaults.color = textDim;
+    Chart.defaults.borderColor = gridColor;
+    Chart.defaults.plugins.tooltip.titleColor = textMain;
+    Chart.defaults.plugins.tooltip.bodyColor = textMain;
+    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(19,26,44,.95)';
+
+    // --- Reps chart (respects channel/warehouse filters via getFilteredAchieved) ---
+    var repRows = state.reps.map(function(rep){
+      return { name: rep.name, adj: adjustedTargetForDay(rep,y,m,day), achieved: getFilteredAchieved(rep.id,y,m,day) };
+    }).sort(function(a,b){ return b.achieved-a.achieved; }).slice(0,12);
+
+    ensureChart('chartReps', {
+      type:'bar',
+      data:{
+        labels: repRows.map(function(r){ return r.name; }),
+        datasets:[
+          {label:'التارجت المعدَّل', data: repRows.map(function(r){ return Math.round(r.adj); }), backgroundColor:'rgba(255,176,32,.35)', borderRadius:5, barPercentage:.75},
+          {label:'المحقق', data: repRows.map(function(r){ return Math.round(r.achieved); }),
+            backgroundColor: repRows.map(function(r){ return r.achieved>=r.adj ? '#2FE6A6' : '#FF5C7A'; }), borderRadius:5, barPercentage:.75}
+        ]
+      },
+      options:{
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color: textDim } } },
+        scales:{
+          x:{ ticks:{ color: textDim }, grid:{ color: gridColor } },
+          y:{ ticks:{ color: textMain, font:{size:11.5} }, grid:{ display:false } }
+        }
+      }
+    });
+
+    // --- Warehouses chart (narrowed to selected warehouse if filtered; channel filter already
+    //     baked into getWarehouseAchieved via warehouseMonthlyStats) ---
+    var whList = state.filterWarehouse ? state.warehouses.filter(function(w){ return w.name===state.filterWarehouse; }) : state.warehouses;
+    var whRows = whList.map(function(wh){
+      var s = warehouseMonthlyStats(wh,y,m,day);
+      return { name: wh.name, pct: s.monthPct };
+    }).sort(function(a,b){ return a.pct-b.pct; }).slice(0,12);
+
+    ensureChart('chartWh', {
+      type:'bar',
+      data:{
+        labels: whRows.map(function(w){ return w.name; }),
+        datasets:[{
+          label:'نسبة الإنجاز %',
+          data: whRows.map(function(w){ return Math.round(w.pct); }),
+          backgroundColor: whRows.map(function(w){ return w.pct>=100 ? '#2FE6A6' : (w.pct>=85 ? '#FFC857' : '#FF5C7A'); }),
+          borderRadius:5, barPercentage:.7
+        }]
+      },
+      options:{
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ ticks:{ color: textDim, callback:function(v){ return v+'%'; } }, grid:{ color: gridColor } },
+          y:{ ticks:{ color: textMain, font:{size:11.5} }, grid:{ display:false } }
+        }
+      }
+    });
+
+    // --- Regions chart (today, via cross-tab so warehouse/channel filters apply) ---
+    var regionQ = queryCross(y,m,day,day,{warehouse:state.filterWarehouse, channel:state.filterChannel}, 'region');
+    var regionRows = Object.keys(regionQ.groups).map(function(n){ return {name:n, today:regionQ.groups[n]}; })
+      .sort(function(a,b){ return b.today-a.today; }).slice(0,8);
+    ensureChart('chartRegions', {
+      type:'bar',
+      data:{
+        labels: regionRows.map(function(r){ return r.name; }),
+        datasets:[{ label:'المحقق اليوم', data: regionRows.map(function(r){ return Math.round(r.today); }), backgroundColor:'#5B8DFF', borderRadius:5 }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ ticks:{ color: textDim, maxRotation:35, minRotation:0, font:{size:10.5} }, grid:{ display:false } },
+          y:{ ticks:{ color: textDim }, grid:{ color: gridColor } }
+        }
+      }
+    });
+
+    // --- Channels doughnut (today, via cross-tab so warehouse filter applies) ---
+    var chanQ = queryCross(y,m,day,day,{warehouse:state.filterWarehouse, channel: null}, 'channel');
+    var chanRows = Object.keys(chanQ.groups).map(function(n){ return {name:n, today:chanQ.groups[n]}; })
+      .filter(function(r){ return r.today>0; }).sort(function(a,b){ return b.today-a.today; });
+    ensureChart('chartChannels', {
+      type:'doughnut',
+      data:{
+        labels: chanRows.map(function(r){ return CHANNEL_SHORT[r.name]||r.name; }),
+        datasets:[{ data: chanRows.map(function(r){ return Math.round(r.today); }), backgroundColor:['#5B8DFF','#B18CFF','#2DD4BF','#FF7AB8','#FFC857'], borderColor: 'transparent' }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'bottom', labels:{ color: textDim, padding:14 } } }
+      }
+    });
+
+    if(regionRows.length===0 && chanRows.length===0){
+      document.querySelector('#chartRegions').closest('.dash-card').insertAdjacentHTML('beforeend',
+        '<div style="margin-top:8px;font-size:11.5px;color:var(--text-faint);">لسه معندناش بيانات مناطق/قنوات — دي بتيجي من رفع تقرير مبيعات تفصيلي (فيه Region وSales Representative Type) من تبويب "الشيت الشهري".</div>');
+    }
+  }
+
+  function renderTodayTab(y,m,day){
+    var isFri = isFriday(y,m,day);
+    var rows = state.reps
+      .filter(function(r){ return r.name.toLowerCase().indexOf(state.searchToday.toLowerCase())>-1; })
+      .map(function(rep){
+        var orig = originalDailyTarget(rep,y,m);
+        var adj = adjustedTargetForDay(rep,y,m,day);
+        var achieved = getFilteredAchieved(rep.id,y,m,day);
+        var ordersToday = repOrdersForDay(rep.id,y,m,day).filter(function(o){
+          if(state.filterChannel && o.ch!==state.filterChannel) return false;
+          if(state.filterWarehouse && o.w!==state.filterWarehouse) return false;
+          return true;
+        });
+        var os = summarizeOrders(ordersToday);
+        var pct = isFri ? null : (adj>0 ? (achieved/adj*100) : (achieved>0?100:0));
+        var st = isFri ? 'off' : statusForPct(pct);
+        return {rep, orig, adj, achieved, pct, st, os};
+      })
+      .sort(function(a,b){ return (a.adj-a.achieved) - (b.adj-b.achieved) < 0 ? 1 : -1; }); // most behind first
+
+    var ym = y+'-'+pad2(m);
+    var meta = state.dims[ym] && state.dims[ym][pad2(day)] && state.dims[ym][pad2(day)]._meta;
+    var lastUpdate = meta && meta.updatedAt ? new Date(meta.updatedAt) : null;
+
+    var html = '';
+    html += noDataTodayBanner(y,m,day);
+    html += '<div class="toolbar">'+
+      '<input class="search-input" id="searchToday" placeholder="بحث عن مندوب..." value="'+escapeAttr(state.searchToday)+'"/>'+
+      '<div style="color:var(--text-faint);font-size:12.5px;text-align:left;">'+
+        (isFri ? '<span style="color:var(--amber);">النهاردة جمعة — مفيش تارجت مطلوب، والمبيعات لسه بتتسجل عادي</span><br>' : '')+
+        'مرتبة حسب الأكثر تأخرًا أولًا'+
+        (lastUpdate ? '<br><span class="live-dot"></span>آخر تحديث بيانات اليوم: '+lastUpdate.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '')+
+      '</div>'+
+    '</div>';
+
+    if(state.reps.length===0){
+      html += emptyState('لسه مفيش مناديب مضافين', 'اضغط على تبويب "إدارة المناديب" علشان تضيف الفريق وتحدد التارجت الشهري لكل مندوب.');
+    } else if(rows.length===0){
+      html += emptyState('مفيش نتائج', 'جرب اسم تاني في البحث.');
+    } else {
+      html += '<div class="table-wrap"><table><thead><tr>'+
+        '<th>#</th><th>المندوب</th><th>تارجت اليوم الأصلي</th><th>التارجت المعدَّل (بعد التعويض)</th>'+
+        '<th>المحقق النهاردة</th><th>فواتير / عملاء</th><th>نسبة الإنجاز</th><th>الحالة</th><th></th>'+
+      '</tr></thead><tbody>';
+      rows.forEach(function(row,i){
+        html += '<tr>'+
+          '<td><span class="rep-rank">'+(i+1)+'</span></td>'+
+          '<td class="rep-name">'+escapeHtml(row.rep.name)+'</td>'+
+          '<td class="num">'+fmtMoney(row.orig)+' ج.م</td>'+
+          '<td class="num" style="color:var(--gold);font-weight:700;">'+(isFri?'—':fmtMoney(row.adj)+' ج.م')+'</td>'+
+          '<td><input type="number" class="achieved-input num" data-rep="'+row.rep.id+'" value="'+ (row.achieved||'') +'" placeholder="0" min="0"'+
+            (!state.isAdmin ? ' disabled title="وضع العرض فقط — سجّل دخول كأدمن للتعديل"' : (filtersActive()?' disabled title="الإدخال متوقف أثناء التصفية — امسح الفلاتر للتعديل"':''))+'/></td>'+
+          '<td class="num" style="color:var(--text-dim);font-size:12px;">'+row.os.invoiceCount+' فاتورة / '+row.os.customerCount+' عميل</td>'+
+          '<td class="pct '+(row.st==='off'?'':row.st)+'">'+(isFri?'—':row.pct.toFixed(0)+'%')+'</td>'+
+          '<td>'+badge(row.st)+'</td>'+
+          '<td><button class="icon-btn details-btn" data-rep="'+row.rep.id+'" title="تفاصيل الفواتير">≡</button></td>'+
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    document.getElementById('tabContent').innerHTML = html;
+
+    var jumpBtn = document.getElementById('jumpToLatestDayBtn');
+    if(jumpBtn){ jumpBtn.addEventListener('click', function(){ jumpToDay(y,m,Number(jumpBtn.textContent.match(/\d+/)[0])); }); }
+
+    var s = document.getElementById('searchToday');
+    if(s){ s.addEventListener('input', function(e){ state.searchToday = e.target.value; renderTodayTab(y,m,day); }); s.focus(); s.selectionStart = s.value.length; }
+
+    document.querySelectorAll('.achieved-input').forEach(function(inp){
+      inp.addEventListener('change', async function(e){
+        var repId = e.target.getAttribute('data-rep');
+        await setAchieved(repId, y, m, day, e.target.value);
+        render();
+        showToast('تم حفظ المحقق');
+      });
+    });
+
+    document.querySelectorAll('.details-btn').forEach(function(b){
+      b.addEventListener('click', function(){ openRepOrdersModal(b.getAttribute('data-rep'), y, m, day, 'day'); });
+    });
+  }
+
+  function renderMonthlyTab(y,m,day){
+    var rows = state.reps
+      .filter(function(r){ return r.name.toLowerCase().indexOf(state.searchToday.toLowerCase())>-1; })
+      .map(function(rep){
+        var ordersToDate = repOrdersToDate(rep.id,y,m,day).filter(function(o){
+          if(state.filterChannel && o.ch!==state.filterChannel) return false;
+          if(state.filterWarehouse && o.w!==state.filterWarehouse) return false;
+          return true;
+        });
+        var os = summarizeOrders(ordersToDate);
+        return {rep, s: repMonthlyStats(rep,y,m,day), os};
+      })
+      .sort(function(a,b){ return a.s.monthPct - b.s.monthPct; }); // most behind first
+
+    var html = noDataTodayBanner(y,m,day) + '<div class="toolbar">'+
+      '<input class="search-input" id="searchMonthly" placeholder="بحث عن مندوب..." value="'+escapeAttr(state.searchToday)+'"/>'+
+      '<div style="color:var(--text-faint);font-size:12.5px;">الخط الذهبي = المفروض تكون وصلت لحد هنا | الشريط = المحقق فعليًا</div>'+
+    '</div>';
+
+    if(state.reps.length===0){
+      html += emptyState('لسه مفيش مناديب مضافين', 'ضيف الفريق من تبويب "إدارة المناديب".');
+    } else {
+      html += '<div class="table-wrap"><table><thead><tr>'+
+        '<th>المندوب</th><th>التارجت الشهري</th><th>المفروض لحد النهاردة</th><th>المحقق فعليًا</th>'+
+        '<th>الفرق</th><th>فواتير / عملاء</th><th>مسار الشهر</th><th>نسبة الإنجاز الشهري</th><th>المتوقع عند قفل الشهر</th><th></th>'+
+      '</tr></thead><tbody>';
+      rows.forEach(function(row){
+        var s = row.s;
+        var st = statusForPct(s.pct);
+        var expectedPctOfMonth = s.wdTotal>0 ? (s.wdElapsed/s.wdTotal*100) : 0;
+        var actualFillPct = clamp(s.monthPct,0,100);
+        var projPct = s.target>0 ? (s.projected/s.target*100) : 0;
+        html += '<tr>'+
+          '<td class="rep-name">'+escapeHtml(row.rep.name)+'</td>'+
+          '<td class="num">'+fmtMoney(s.target)+' ج.م</td>'+
+          '<td class="num">'+fmtMoney(s.expectedToDate)+' ج.م</td>'+
+          '<td class="num">'+fmtMoney(s.actualToDate)+' ج.م</td>'+
+          '<td class="num pct '+(s.variance>=0?'green':'red')+'">'+(s.variance>=0?'+':'−')+fmtMoney(Math.abs(s.variance))+'</td>'+
+          '<td class="num" style="color:var(--text-dim);font-size:12px;">'+row.os.invoiceCount+' فاتورة / '+row.os.customerCount+' عميل</td>'+
+          '<td><div class="track">'+
+            '<div class="track-fill '+(s.variance>=0?'green':'red')+'" style="width:'+actualFillPct+'%;"></div>'+
+            '<div class="track-marker" style="right:'+clamp(expectedPctOfMonth,0,100)+'%;"></div>'+
+          '</div></td>'+
+          '<td class="pct '+st+'">'+s.monthPct.toFixed(0)+'%</td>'+
+          '<td class="num pct '+statusForPct(projPct)+'" style="font-size:12.5px;">'+fmtMoney(s.projected)+' ج.م ('+projPct.toFixed(0)+'%)</td>'+
+          '<td><button class="icon-btn details-btn" data-rep="'+row.rep.id+'" title="تفاصيل الفواتير">≡</button></td>'+
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    document.getElementById('tabContent').innerHTML = html;
+    var s2 = document.getElementById('searchMonthly');
+    if(s2){ s2.addEventListener('input', function(e){ state.searchToday = e.target.value; renderMonthlyTab(y,m,day); }); s2.focus(); s2.selectionStart = s2.value.length; }
+
+    document.querySelectorAll('.details-btn').forEach(function(b){
+      b.addEventListener('click', function(){ openRepOrdersModal(b.getAttribute('data-rep'), y, m, day, 'month'); });
+    });
+  }
+
+  function renderSheetTab(y,m,day){
+    var dim = daysInMonth(y,m);
+    var todayReal = new Date();
+    var isCurrentMonth = (todayReal.getFullYear()===y && todayReal.getMonth()+1===m);
+    var realToday = todayReal.getDate();
+
+    var reps = state.reps.filter(function(r){ return r.name.toLowerCase().indexOf(state.searchSheet.toLowerCase())>-1; });
+
+    var html = '<div class="toolbar">'+
+      '<input class="search-input" id="searchSheet" placeholder="بحث عن مندوب..." value="'+escapeAttr(state.searchSheet)+'"/>'+
+      (state.isAdmin ? (
+        '<div style="display:flex;gap:8px;align-items:center;">'+
+          '<span style="color:var(--text-faint);font-size:12px;">الحفظ تلقائي عند التعديل</span>'+
+          '<button class="btn secondary" id="downloadTemplateBtn">تنزيل قالب فاضي</button>'+
+          '<button class="btn" id="importSheetBtn">↑ رفع شيت المحقق</button>'+
+        '</div>'
+      ) : '<span style="color:var(--text-faint);font-size:12px;">👁 وضع العرض فقط</span>')+
+    '</div>';
+
+    if(state.reps.length===0){
+      html += emptyState('لسه مفيش مناديب مضافين', 'ضيف الفريق من تبويب "إدارة المناديب" الأول.');
+    } else if(reps.length===0){
+      html += emptyState('مفيش نتائج', 'جرب اسم تاني في البحث.');
+    } else {
+      html += '<div class="table-wrap"><div class="sheet-scroll"><table class="sheet"><thead><tr>';
+      html += '<th class="col-name">المندوب</th>';
+      for(var d=1; d<=dim; d++){
+        var isToday = isCurrentMonth && d===realToday;
+        html += '<th class="'+(isToday?'today-col':'')+'">'+d+'</th>';
+      }
+      html += '<th class="col-total">إجمالي الشهر</th>';
+      html += '</tr></thead><tbody>';
+
+      reps.forEach(function(rep){
+        var total = cumulativeActual(rep.id, y, m, dim);
+        var monthPct = rep.monthlyTarget>0 ? (total/rep.monthlyTarget*100) : 0;
+        html += '<tr>';
+        html += '<td class="col-name">'+escapeHtml(rep.name)+'</td>';
+        for(var d2=1; d2<=dim; d2++){
+          var val = getAchieved(rep.id, y, m, d2);
+          var isToday2 = isCurrentMonth && d2===realToday;
+          html += '<td class="'+(isToday2?'today-col':'')+'">'+
+            '<input type="number" min="0" class="cell-input num" data-rep="'+rep.id+'" data-day="'+d2+'" value="'+(val||'')+'" placeholder="0"'+(!state.isAdmin?' disabled':'')+'/>'+
+          '</td>';
+        }
+        html += '<td class="col-total num">'+fmtMoney(total)+' ج.م<br><span class="pct '+statusForPct(monthPct)+'" style="font-size:11px;">'+monthPct.toFixed(0)+'%</span></td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div></div>';
+      html += '<div class="sheet-legend">'+
+        '<span><span class="dot" style="background:rgba(217,167,59,.25);"></span>عمود اليوم الحالي</span>'+
+        '<span>مرّر يمينًا/يسارًا لعرض باقي أيام الشهر</span>'+
+      '</div>';
+    }
+
+    document.getElementById('tabContent').innerHTML = html;
+
+    var s = document.getElementById('searchSheet');
+    if(s){ s.addEventListener('input', function(e){ state.searchSheet = e.target.value; renderSheetTab(y,m,day); }); s.focus(); s.selectionStart = s.value.length; }
+
+    document.getElementById('downloadTemplateBtn') && document.getElementById('downloadTemplateBtn').addEventListener('click', function(){ downloadTemplateCSV(y,m); });
+    document.getElementById('importSheetBtn') && document.getElementById('importSheetBtn').addEventListener('click', function(){ openImportModal(y,m); });
+
+    document.querySelectorAll('.cell-input').forEach(function(inp){
+      inp.addEventListener('change', async function(e){
+        var repId = e.target.getAttribute('data-rep');
+        var d3 = Number(e.target.getAttribute('data-day'));
+        await setAchieved(repId, y, m, d3, e.target.value);
+        // update this row's total + pct in place without a full re-render (keeps scroll position)
+        var rep = state.reps.find(function(r){ return r.id===repId; });
+        var total = cumulativeActual(repId, y, m, dim);
+        var monthPct = rep.monthlyTarget>0 ? (total/rep.monthlyTarget*100) : 0;
+        var row = e.target.closest('tr');
+        var totalCell = row.querySelector('.col-total');
+        totalCell.innerHTML = fmtMoney(total)+' ج.م<br><span class="pct '+statusForPct(monthPct)+'" style="font-size:11px;">'+monthPct.toFixed(0)+'%</span>';
+        renderKPIs(state.selectedDate.getFullYear(), state.selectedDate.getMonth()+1, state.selectedDate.getDate());
+        showToast('تم الحفظ');
+      });
+    });
+  }
+
+  // ---------------- Import / Export sheet ----------------
+  function downloadTemplateCSV(y,m){
+    if(state.reps.length===0){ showToast('ضيف مناديب الأول'); return; }
+    var dim = daysInMonth(y,m);
+    var header = ['اسم المندوب'];
+    for(var d=1; d<=dim; d++) header.push(String(d));
+    var lines = [header.join(',')];
+    state.reps.forEach(function(rep){
+      var row = [rep.name];
+      for(var d2=1; d2<=dim; d2++) row.push('');
+      lines.push(row.join(','));
+    });
+    var csv = '\uFEFF' + lines.join('\r\n');
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'قالب-المحقق-'+y+'-'+pad2(m)+'.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function parseDayHeader(cell){
+    var s = String(cell==null?'':cell).trim();
+    if(s==='') return null;
+    var n = Number(s);
+    if(Number.isInteger(n) && n>=1 && n<=31) return n;
+    var d = new Date(s);
+    if(!isNaN(d.getTime())) return d.getDate();
+    return null;
+  }
+
+  function parseAmount(v){
+    if(v===undefined || v===null) return null;
+    var s = String(v).trim();
+    if(s==='') return null;
+    s = s.replace(/[^\d.\-]/g,'');
+    if(s==='') return null;
+    var n = Number(s);
+    return isNaN(n) ? null : n;
+  }
+
+  function parseDelimitedText(text){
+    var lines = text.split(/\r\n|\n|\r/).filter(function(l){ return l.trim()!==''; });
+    var delim = lines[0] && lines[0].indexOf('\t')>-1 ? '\t' : ',';
+    return lines.map(function(l){ return l.split(delim); });
+  }
+
+  function readFileAsRows(file){
+    var ext = file.name.split('.').pop().toLowerCase();
+    return new Promise(function(resolve,reject){
+      var reader = new FileReader();
+      reader.onerror = function(){ reject(new Error('تعذر قراءة الملف')); };
+      if(ext==='xlsx' || ext==='xls'){
+        reader.onload = function(e){
+          try{
+            var data = new Uint8Array(e.target.result);
+            var wb = XLSX.read(data, {type:'array', cellDates:true});
+            var sheet = wb.Sheets[wb.SheetNames[0]];
+            var rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+            resolve(rows);
+          }catch(err){ reject(err); }
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.onload = function(e){
+          try{ resolve(parseDelimitedText(e.target.result)); }catch(err){ reject(err); }
+        };
+        reader.readAsText(file, 'UTF-8');
+      }
+    });
+  }
+
+  function buildImportPlan(rows, y, m){
+    if(!rows || rows.length<2) return {error:'الملف فاضي أو مفيهوش صفوف بيانات.'};
+    var header = rows[0];
+    var dayCols = [];
+    for(var i=1;i<header.length;i++){
+      var dnum = parseDayHeader(header[i]);
+      if(dnum) dayCols.push({idx:i, day:dnum});
+    }
+    if(dayCols.length===0) return {error:'معرفتش أعمدة الأيام. لازم الصف الأول يبدأ باسم المندوب وبعدين أرقام الأيام (1، 2، 3...).'};
+
+    var updates=[], matchedIds={}, unmatchedNames=[];
+    for(var r=1;r<rows.length;r++){
+      var row = rows[r];
+      if(!row || !row[0] || String(row[0]).trim()==='') continue;
+      var name = String(row[0]).trim();
+      var rep = state.reps.find(function(x){ return x.name.trim().toLowerCase()===name.toLowerCase(); });
+      if(!rep){ if(unmatchedNames.indexOf(name)===-1) unmatchedNames.push(name); continue; }
+      matchedIds[rep.id]=true;
+      dayCols.forEach(function(dc){
+        var amt = parseAmount(row[dc.idx]);
+        if(amt!==null) updates.push({repId:rep.id, day:dc.day, value:amt});
+      });
+    }
+    return {updates:updates, matchedCount:Object.keys(matchedIds).length, unmatchedNames:unmatchedNames, dayColsCount:dayCols.length};
+  }
+
+  async function applyImportPlan(plan, y, m){
+    var key = y+'-'+pad2(m);
+    if(!state.daily[key]) state.daily[key] = {};
+    plan.updates.forEach(function(u){
+      if(!state.daily[key][u.repId]) state.daily[key][u.repId] = {};
+      state.daily[key][u.repId][pad2(u.day)] = u.value;
+    });
+    await saveMonth(key);
+  }
+
+  function detectReportFormat(rows){
+    if(!rows || rows.length<2) return null;
+    var header = rows[0].map(function(h){ return String(h==null?'':h).trim(); });
+    if(header.indexOf('Created By')>-1 && header.indexOf('Order Number')>-1 &&
+       (header.indexOf('Net Sales After Cashback')>-1 || header.indexOf('Gross Sales')>-1)){
+      return 'orders';
+    }
+    if(header.length>1 && parseDayHeader(header[1])!==null){
+      return 'sheet';
+    }
+    return null;
+  }
+
+  function parseAnyDate(v){
+    if(v instanceof Date && !isNaN(v.getTime())) return v;
+    if(typeof v === 'number' && v>0){
+      var epoch = new Date(Date.UTC(1899,11,30));
+      return new Date(epoch.getTime() + v*86400000);
+    }
+    if(typeof v === 'string' && v.trim()!==''){
+      var d = new Date(v.trim());
+      if(!isNaN(d.getTime())) return d;
+    }
+    return null;
+  }
+
+  function errorHtml(msg){ return '<div class="import-results"><span class="warn">'+escapeHtml(msg)+'</span></div>'; }
+
+  // Aggregates a raw order-level sales report (one row per order) into:
+  // - per-rep per-day totals (matched against "Created By" -> registered rep name)
+  // - per-day totals by Region / SubRegion / Warehouse (regardless of rep match)
+  function srTypeLabel(raw){
+    var v = String(raw==null?'':raw).trim();
+    if(v==='Telesales') return 'سيلز (تليسيلز)';
+    if(v==='OnGroundSalesRepresentative') return 'أون جراوند';
+    if(v==='0' || v==='') return 'التطبيق (بدون مندوب)';
+    return v;
+  }
+
+  function buildOrdersImportPlan(rows, opts){
+    var header = rows[0].map(function(h){ return String(h==null?'':h).trim(); });
+    var idx = {};
+    header.forEach(function(h,i){ idx[h]=i; });
+    var required = ['Created By', opts.dateCol, opts.amountCol, 'Order Status', 'Region', 'SubRegion', 'Warehouse'];
+    for(var i=0;i<required.length;i++){
+      if(idx[required[i]]===undefined) return {error:'العمود "'+required[i]+'" مش موجود في الملف.'};
+    }
+    var hasSrType = idx['Sales Representative Type']!==undefined;
+    var hasCustomerCode = idx['Customer Code']!==undefined;
+    var hasOrderNumber = idx['Order Number']!==undefined;
+
+    var repDayTotals = {};   // ym -> repId -> "DD" -> sum
+    var dimDayTotals = {};   // ym -> "DD" -> {regions:{}, subregions:{}, warehouses:{}, srType:{}, cross:{wh:{region:{channel:amt}}}}
+    var ordersByDay = {};    // ym -> "DD" -> repId -> [{o,c,a,t,w,ch}]
+    var unmatchedNames = {}; // name -> count
+    var processedOrders=0, skippedStatus=0, skippedNoDate=0, totalAmount=0;
+
+    for(var r=1;r<rows.length;r++){
+      var row = rows[r];
+      if(!row || row.length===0) continue;
+      var status = String(row[idx['Order Status']]==null?'':row[idx['Order Status']]).trim();
+      if(opts.statusMode==='excludeCancelled' && status==='Cancelled'){ skippedStatus++; continue; }
+      if(opts.statusMode==='confirmedOnly' && status!=='Confirmed'){ skippedStatus++; continue; }
+
+      var dateObj = parseAnyDate(row[idx[opts.dateCol]]);
+      if(!dateObj){ skippedNoDate++; continue; }
+      var ym = dateObj.getFullYear()+'-'+pad2(dateObj.getMonth()+1);
+      var dayKey = pad2(dateObj.getDate());
+
+      var amount = parseAmount(row[idx[opts.amountCol]]) || 0;
+      var repNameRaw = String(row[idx['Created By']]==null?'':row[idx['Created By']]).trim();
+      var region = String(row[idx['Region']]==null?'':row[idx['Region']]).trim() || 'غير محدد';
+      var subregion = String(row[idx['SubRegion']]==null?'':row[idx['SubRegion']]).trim() || 'غير محدد';
+      var warehouse = String(row[idx['Warehouse']]==null?'':row[idx['Warehouse']]).trim() || 'غير محدد';
+      var chLabel = hasSrType ? srTypeLabel(row[idx['Sales Representative Type']]) : 'غير مصنف';
+
+      processedOrders++; totalAmount += amount;
+
+      var rep = null;
+      if(repNameRaw){
+        rep = state.reps.find(function(x){ return x.name.trim().toLowerCase()===repNameRaw.toLowerCase(); });
+        if(rep){
+          repDayTotals[ym] = repDayTotals[ym] || {};
+          repDayTotals[ym][rep.id] = repDayTotals[ym][rep.id] || {};
+          repDayTotals[ym][rep.id][dayKey] = (repDayTotals[ym][rep.id][dayKey]||0) + amount;
+
+          if(hasCustomerCode || hasOrderNumber){
+            ordersByDay[ym] = ordersByDay[ym] || {};
+            ordersByDay[ym][dayKey] = ordersByDay[ym][dayKey] || {};
+            ordersByDay[ym][dayKey][rep.id] = ordersByDay[ym][dayKey][rep.id] || [];
+            ordersByDay[ym][dayKey][rep.id].push({
+              o: hasOrderNumber ? String(row[idx['Order Number']]==null?'':row[idx['Order Number']]).trim() : '',
+              c: hasCustomerCode ? String(row[idx['Customer Code']]==null?'':row[idx['Customer Code']]).trim() : '',
+              a: amount,
+              t: pad2(dateObj.getHours())+':'+pad2(dateObj.getMinutes()),
+              w: warehouse,
+              ch: chLabel,
+              r: region,
+              sr: subregion
+            });
+          }
+        } else {
+          unmatchedNames[repNameRaw] = (unmatchedNames[repNameRaw]||0) + 1;
+        }
+      }
+
+      dimDayTotals[ym] = dimDayTotals[ym] || {};
+      dimDayTotals[ym][dayKey] = dimDayTotals[ym][dayKey] || {regions:{}, subregions:{}, warehouses:{}, srType:{}, cross:{}};
+      var dd = dimDayTotals[ym][dayKey];
+      dd.regions[region] = (dd.regions[region]||0) + amount;
+      dd.subregions[subregion] = (dd.subregions[subregion]||0) + amount;
+      dd.warehouses[warehouse] = (dd.warehouses[warehouse]||0) + amount;
+      dd.srType[chLabel] = (dd.srType[chLabel]||0) + amount;
+      // 3-way cross-tab: warehouse -> region -> channel -> amount. From this single structure
+      // we can answer ANY combination of warehouse/region/channel filters by summation.
+      dd.cross[warehouse] = dd.cross[warehouse] || {};
+      dd.cross[warehouse][region] = dd.cross[warehouse][region] || {};
+      dd.cross[warehouse][region][chLabel] = (dd.cross[warehouse][region][chLabel]||0) + amount;
+    }
+
+    var matchedRepIds = {};
+    Object.keys(repDayTotals).forEach(function(ym2){
+      Object.keys(repDayTotals[ym2]).forEach(function(id){ matchedRepIds[id]=true; });
+    });
+
+    return {
+      repDayTotals: repDayTotals,
+      dimDayTotals: dimDayTotals,
+      ordersByDay: ordersByDay,
+      unmatchedNames: unmatchedNames,
+      matchedCount: Object.keys(matchedRepIds).length,
+      processedOrders: processedOrders,
+      skippedStatus: skippedStatus,
+      skippedNoDate: skippedNoDate,
+      totalAmount: totalAmount
+    };
+  }
+
+  async function applyOrdersImportPlan(plan){
+    var nowIso = new Date().toISOString();
+    for(var ym in plan.repDayTotals){
+      await loadMonth(ym);
+      if(!state.daily[ym]) state.daily[ym] = {};
+      var repMap = plan.repDayTotals[ym];
+      for(var repId in repMap){
+        if(!state.daily[ym][repId]) state.daily[ym][repId] = {};
+        for(var dayKey in repMap[repId]){
+          state.daily[ym][repId][dayKey] = repMap[repId][dayKey];
+        }
+      }
+      await saveMonth(ym);
+    }
+    for(var ym2 in plan.dimDayTotals){
+      await loadDims(ym2);
+      if(!state.dims[ym2]) state.dims[ym2] = {};
+      var dayMap = plan.dimDayTotals[ym2];
+      for(var dayKey2 in dayMap){
+        dayMap[dayKey2]._meta = {updatedAt: nowIso};
+        state.dims[ym2][dayKey2] = dayMap[dayKey2];
+      }
+      await saveDims(ym2);
+    }
+    for(var ym3 in plan.ordersByDay){
+      await loadOrders(ym3);
+      if(!state.orders[ym3]) state.orders[ym3] = {};
+      var odMap = plan.ordersByDay[ym3];
+      for(var dayKey3 in odMap){
+        state.orders[ym3][dayKey3] = odMap[dayKey3];
+      }
+      await saveOrders(ym3);
+    }
+  }
+
+  function openImportModal(y,m){
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal">'+
+        '<h3>رفع شيت المحقق اليومي</h3>'+
+        '<div class="field">'+
+          '<div class="hint" style="margin-bottom:10px;">'+
+            'مدعوم نوعين من الملفات ويتم التعرف عليهم أوتوماتيك:<br>'+
+            '١) <b style="color:var(--text-dim);">شيت المحقق البسيط</b>: عمود اسم المندوب، وبعده أعمدة أرقام الأيام. '+
+            '<button class="link-btn" id="tplLinkBtn" type="button">تنزيل قالب فاضي</button>.<br>'+
+            '٢) <b style="color:var(--text-dim);">تقرير مبيعات تفصيلي (أوردر بأوردر)</b>: فيه أعمدة زي Created By وOrder Number وRegion وSubRegion وWarehouse — هيتم تجميعه لكل مندوب/يوم أوتوماتيك، وكمان يحدّث بيانات "التوزيع الجغرافي".'+
+          '</div>'+
+          '<div class="file-input-wrap">'+
+            '<input type="file" id="importFile" accept=".csv,.xlsx,.xls"/>'+
+          '</div>'+
+        '</div>'+
+        '<div id="importResultsBox"></div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn secondary" id="cancelImportBtn">إغلاق</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+    document.getElementById('cancelImportBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+    document.getElementById('tplLinkBtn').addEventListener('click', function(){ downloadTemplateCSV(y,m); });
+
+    document.getElementById('importFile').addEventListener('change', async function(e){
+      var file = e.target.files[0];
+      if(!file) return;
+      var box = document.getElementById('importResultsBox');
+      box.innerHTML = '<div class="import-results">جاري القراءة والمعالجة...</div>';
+      try{
+        var rows = await readFileAsRows(file);
+        var format = detectReportFormat(rows);
+
+        if(format==='sheet'){
+          var plan = buildImportPlan(rows, y, m);
+          if(plan.error){ box.innerHTML = errorHtml(plan.error); return; }
+          await applyImportPlan(plan, y, m);
+          var summary = '<div class="import-results">'+
+            '<div><span class="ok">تم التحديث ✓</span> — '+plan.matchedCount+' مندوب، '+plan.updates.length+' خلية بيانات (على مدار '+plan.dayColsCount+' يوم).</div>';
+          if(plan.unmatchedNames.length>0){
+            summary += '<div style="margin-top:8px;">'+
+              '<span class="warn">'+plan.unmatchedNames.length+' اسم في الملف مش موجود عندك في المناديب</span>'+
+              '<div class="unmatched-list">'+plan.unmatchedNames.map(escapeHtml).join('، ')+'</div>'+
+            '</div>';
+          }
+          summary += '</div>';
+          box.innerHTML = summary;
+          render();
+          showToast('تم استيراد الشيت');
+        } else if(format==='orders'){
+          renderOrdersImportSettings(rows, box);
+        } else {
+          box.innerHTML = errorHtml('صيغة الملف مش متعرف عليها. لازم يكون إما "شيت المحقق" (اسم مندوب + أرقام أيام)، أو تقرير مبيعات فيه أعمدة Created By وOrder Number.');
+        }
+      }catch(err){
+        box.innerHTML = errorHtml('حصل خطأ في قراءة الملف: '+(err.message||String(err)));
+      }
+    });
+  }
+
+  function renderOrdersImportSettings(rows, box){
+    var header = rows[0].map(function(h){ return String(h==null?'':h).trim(); });
+    var amountOptions = '';
+    if(header.indexOf('Net Sales After Cashback')>-1) amountOptions += '<option value="Net Sales After Cashback">صافي المبيعات بعد الكاش باك (الأدق)</option>';
+    if(header.indexOf('Net Sales Before Cashback')>-1) amountOptions += '<option value="Net Sales Before Cashback">صافي المبيعات قبل الكاش باك</option>';
+    if(header.indexOf('Gross Sales')>-1) amountOptions += '<option value="Gross Sales">إجمالي المبيعات (قبل الخصومات)</option>';
+
+    var dateOptions = '<option value="Creation Date">تاريخ إنشاء الأوردر</option>';
+    if(header.indexOf('Delivered Date')>-1) dateOptions += '<option value="Delivered Date">تاريخ التسليم الفعلي</option>';
+    if(header.indexOf('Delivery Date')>-1) dateOptions += '<option value="Delivery Date">تاريخ التسليم المتوقع</option>';
+
+    box.innerHTML = '<div class="import-results">'+
+      '<div style="margin-bottom:10px;color:var(--text-dim);">اكتشفنا إن الملف ده تقرير مبيعات تفصيلي (أوردر بأوردر). حدد الإعدادات وبعدين اضغط "تنفيذ الاستيراد":</div>'+
+      '<div class="field"><label>احسب المحقق من عمود</label><select id="optAmount">'+amountOptions+'</select></div>'+
+      '<div class="field"><label>يوم الإنجاز يتحدد بعمود</label><select id="optDate">'+dateOptions+'</select></div>'+
+      '<div class="field"><label>الأوردرات المحسوبة</label><select id="optStatus">'+
+        '<option value="excludeCancelled">الكل ما عدا الملغي (Cancelled)</option>'+
+        '<option value="confirmedOnly">المؤكد فقط (Confirmed)</option>'+
+        '<option value="all">كل الحالات بدون استثناء</option>'+
+      '</select></div>'+
+      '<button class="btn" id="runOrdersImportBtn" style="margin-top:6px;">تنفيذ الاستيراد</button>'+
+      '<div id="ordersImportResult" style="margin-top:12px;"></div>'+
+    '</div>';
+
+    document.getElementById('runOrdersImportBtn').addEventListener('click', async function(){
+      var opts = {
+        amountCol: document.getElementById('optAmount').value,
+        dateCol: document.getElementById('optDate').value,
+        statusMode: document.getElementById('optStatus').value
+      };
+      var resBox = document.getElementById('ordersImportResult');
+      resBox.innerHTML = 'جاري التنفيذ...';
+      var plan = buildOrdersImportPlan(rows, opts);
+      if(plan.error){ resBox.innerHTML = '<span class="warn">'+escapeHtml(plan.error)+'</span>'; return; }
+      await applyOrdersImportPlan(plan);
+
+      var unmatchedList = Object.keys(plan.unmatchedNames);
+      var summary = '<div><span class="ok">تم الاستيراد ✓</span> — تمت معالجة '+plan.processedOrders+' أوردر بإجمالي '+fmtMoney(plan.totalAmount)+' ج.م.</div>'+
+        '<div style="margin-top:6px;">اترّبط منهم '+plan.matchedCount+' مندوب مسجل عندك، والمحقق بتاعهم اتحدث لليوم المناسب.</div>';
+      if(plan.skippedStatus>0) summary += '<div style="margin-top:4px;color:var(--text-faint);">'+plan.skippedStatus+' أوردر اتجاهل حسب فلتر الحالة اللي اخترته.</div>';
+      if(plan.skippedNoDate>0) summary += '<div style="margin-top:4px;color:var(--text-faint);">'+plan.skippedNoDate+' أوردر اتجاهل لأن التاريخ مش واضح.</div>';
+      if(unmatchedList.length>0){
+        summary += '<div style="margin-top:8px;"><span class="warn">'+unmatchedList.length+' اسم في عمود Created By مش مطابق لمندوب مسجل عندك (على الأغلب عملاء بيطلبوا مباشرة عن طريق MerchantApp)</span>'+
+          '<div class="unmatched-list">'+unmatchedList.slice(0,50).map(escapeHtml).join('، ')+(unmatchedList.length>50?' ...':'')+'</div></div>';
+      }
+      summary += '<div style="margin-top:8px;color:var(--text-faint);">بيانات المناطق والمخازن اتحدثت — تقدر تشوفها في تبويب "التوزيع الجغرافي".</div>';
+      resBox.innerHTML = summary;
+      render();
+      showToast('تم الاستيراد والتحديث');
+    });
+  }
+
+  function aggregateDimRows(dimType, y, m, day){
+    var ym = y+'-'+pad2(m);
+    var monthObj = state.dims[ym] || {};
+    var todayObj = (monthObj[pad2(day)] && monthObj[pad2(day)][dimType]) || {};
+    var monthTotals = {};
+    for(var d=1; d<=day; d++){
+      var dObj = monthObj[pad2(d)];
+      if(dObj && dObj[dimType]){
+        for(var name in dObj[dimType]) monthTotals[name] = (monthTotals[name]||0) + dObj[dimType][name];
+      }
+    }
+    var names = {};
+    Object.keys(todayObj).forEach(function(n){ names[n]=true; });
+    Object.keys(monthTotals).forEach(function(n){ names[n]=true; });
+    var rows = Object.keys(names).map(function(n){
+      return {name:n, today: todayObj[n]||0, month: monthTotals[n]||0};
+    });
+    rows.sort(function(a,b){ return b.month - a.month; });
+    return rows;
+  }
+
+  function aggregateGeoRows(dimType, y, m, day){
+    // regions/warehouses/srType can be filtered via the cross-tab; subregions has no cross-tab yet,
+    // so it always shows the unfiltered flat totals.
+    if(dimType==='subregions'){
+      return aggregateDimRows('subregions', y, m, day);
+    }
+    var groupKey = dimType==='regions' ? 'region' : (dimType==='warehouses' ? 'warehouse' : 'channel');
+    var filters = {
+      warehouse: dimType==='warehouses' ? null : state.filterWarehouse,
+      channel: dimType==='srType' ? null : state.filterChannel
+    };
+    var todayQ = queryCross(y, m, day, day, filters, groupKey);
+    var monthQ = queryCross(y, m, 1, day, filters, groupKey);
+    var names = {};
+    Object.keys(todayQ.groups).forEach(function(n){ names[n]=true; });
+    Object.keys(monthQ.groups).forEach(function(n){ names[n]=true; });
+    var rows = Object.keys(names).map(function(n){
+      return { name: dimType==='srType' ? (CHANNEL_SHORT[n]||n) : n, today: todayQ.groups[n]||0, month: monthQ.groups[n]||0 };
+    });
+    rows.sort(function(a,b){ return b.month-a.month; });
+    return rows;
+  }
+
+  function renderGeoTab(y,m,day){
+    var dimLabels = {regions:'المنطقة (Region)', subregions:'المنطقة الفرعية (SubRegion)', warehouses:'المخزن (Warehouse)', srType:'قناة البيع (سيلز / أون جراوند / تطبيق)'};
+    var html = '<div class="toolbar">'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        Object.keys(dimLabels).map(function(k){
+          return '<button class="btn '+(state.geoDim===k?'':'secondary')+'" data-geo="'+k+'">'+dimLabels[k]+'</button>';
+        }).join('')+
+      '</div>'+
+      '<input class="search-input" id="searchGeo" placeholder="بحث..." value="'+escapeAttr(state.searchGeo)+'"/>'+
+    '</div>';
+
+    if(state.geoDim==='subregions' && filtersActive()){
+      html += '<div class="logic-note" style="margin-top:0;">المنطقة الفرعية (SubRegion) لسه مبتستجيبش لفلاتر القناة/المخزن — الأرقام هنا إجمالية غير مفلترة.</div>';
+    }
+
+    var allRows = aggregateGeoRows(state.geoDim, y, m, day);
+    var rows = allRows.filter(function(r){ return r.name.toLowerCase().indexOf(state.searchGeo.toLowerCase())>-1; });
+
+    if(allRows.length===0){
+      html += emptyState('لسه مفيش بيانات جغرافية', 'ارفع "شيت المحقق" بصيغة تقرير المبيعات التفصيلي (اللي فيه Region وSubRegion وWarehouse) من تبويب "الشيت الشهري" → "رفع شيت المحقق".');
+    } else if(rows.length===0){
+      html += emptyState('مفيش نتائج', 'جرب اسم تاني في البحث.');
+    } else {
+      var grandMonth = 0;
+      rows.forEach(function(r){ grandMonth += r.month; });
+      var showDrill = state.geoDim!=='srType';
+      var singularType = {regions:'region', subregions:'subregion', warehouses:'warehouse'}[state.geoDim];
+      html += '<div class="table-wrap"><table><thead><tr>'+
+        '<th>'+dimLabels[state.geoDim]+'</th><th>المحقق اليوم</th><th>المحقق التراكمي بالشهر</th><th>% من إجمالي الشهر (للنتائج المعروضة)</th>'+(showDrill?'<th></th>':'')+
+      '</tr></thead><tbody>';
+      rows.forEach(function(r,ri){
+        var pctOfTotal = grandMonth>0 ? (r.month/grandMonth*100) : 0;
+        html += '<tr>'+
+          '<td class="rep-name">'+escapeHtml(r.name)+'</td>'+
+          '<td class="num">'+fmtMoney(r.today)+' ج.م</td>'+
+          '<td class="num">'+fmtMoney(r.month)+' ج.م</td>'+
+          '<td class="num" style="color:var(--text-dim);">'+pctOfTotal.toFixed(1)+'%</td>'+
+          (showDrill ? '<td><button class="icon-btn geo-drill-btn" data-idx="'+ri+'" title="مين حقق ده؟">≡</button></td>' : '')+
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    document.getElementById('tabContent').innerHTML = html;
+    document.querySelectorAll('[data-geo]').forEach(function(b){
+      b.addEventListener('click', function(){ state.geoDim = b.getAttribute('data-geo'); renderGeoTab(y,m,day); });
+    });
+    var sg = document.getElementById('searchGeo');
+    if(sg){ sg.addEventListener('input', function(e){ state.searchGeo = e.target.value; renderGeoTab(y,m,day); }); sg.focus(); sg.selectionStart = sg.value.length; }
+
+    document.querySelectorAll('.geo-drill-btn').forEach(function(b){
+      b.addEventListener('click', function(){
+        var idx = Number(b.getAttribute('data-idx'));
+        var row = rows[idx];
+        var singularType = {regions:'region', subregions:'subregion', warehouses:'warehouse'}[state.geoDim];
+        openDimBreakdownModal(singularType, row.name, dimLabels[state.geoDim].split(' (')[0], y, m, day, 'month');
+      });
+    });
+  }
+
+  function renderWarehousesTab(y,m,day){
+    var html = '<div class="toolbar">'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button class="btn '+(state.whView==='performance'?'':'secondary')+'" data-whview="performance">الأداء</button>'+
+        '<button class="btn '+(state.whView==='manage'?'':'secondary')+'" data-whview="manage">إدارة التارجت</button>'+
+      '</div>'+
+      '<input class="search-input" id="searchWh" placeholder="بحث عن مخزن..." value="'+escapeAttr(state.searchWh)+'"/>'+
+    '</div>';
+
+    document.getElementById('tabContent').innerHTML = html;
+    document.querySelectorAll('[data-whview]').forEach(function(b){
+      b.addEventListener('click', function(){ state.whView = b.getAttribute('data-whview'); renderWarehousesTab(y,m,day); });
+    });
+    var sw = document.getElementById('searchWh');
+    if(sw){ sw.addEventListener('input', function(e){ state.searchWh = e.target.value; renderWarehousesTab(y,m,day); }); sw.focus(); sw.selectionStart = sw.value.length; }
+
+    var body = document.createElement('div');
+    document.getElementById('tabContent').appendChild(body);
+
+    if(state.whView==='performance') renderWarehousePerformance(body, y, m, day);
+    else renderWarehouseManage(body, y, m, day);
+  }
+
+  function classifyWarehouseRegion(name){
+    var n = name || '';
+    if(n.indexOf('القاهر')>-1) return 'القاهرة';
+    if(n.indexOf('الجيز')>-1) return 'الجيزة';
+    return 'الدلتا (باقي المخازن)';
+  }
+
+  function renderWarehousePerformance(container, y, m, day){
+    var whs = state.warehouses.filter(function(w){ return w.name.toLowerCase().indexOf(state.searchWh.toLowerCase())>-1; });
+    if(state.filterWarehouse) whs = whs.filter(function(w){ return w.name===state.filterWarehouse; });
+
+    if(state.warehouses.length===0){
+      container.innerHTML = emptyState('لسه مفيش مخازن مسجلة بتارجت', 'روح لتبويب "إدارة التارجت" هنا وضيف المخازن وتارجتها الشهري.');
+      return;
+    }
+    if(whs.length===0){ container.innerHTML = emptyState('مفيش نتائج', 'جرب اسم تاني في البحث أو امسح فلتر المخزن.'); return; }
+
+    var rows = whs.map(function(wh){
+      var s = warehouseMonthlyStats(wh, y, m, day);
+      var adjToday = adjustedWarehouseTargetForDay(wh, y, m, day);
+      var chanQ = queryCross(y, m, 1, day, {warehouse: wh.name, channel: null}, 'channel');
+      return {wh, s, adjToday, channels: chanQ.groups};
+    }).sort(function(a,b){ return a.s.monthPct - b.s.monthPct; });
+
+    // Regional roll-up: Cairo / Giza / Delta (everything else), auto-classified from warehouse names
+    var regionGroups = {};
+    var groupOrder = ['القاهرة','الجيزة','الدلتا (باقي المخازن)'];
+    groupOrder.forEach(function(g){ regionGroups[g] = {target:0, actual:0, expected:0, count:0}; });
+    rows.forEach(function(row){
+      var g = classifyWarehouseRegion(row.wh.name);
+      regionGroups[g].target += row.s.target;
+      regionGroups[g].actual += row.s.actualToDate;
+      regionGroups[g].expected += row.s.expectedToDate;
+      regionGroups[g].count += 1;
+    });
+    var regionCardsHtml = '<div class="kpis" style="margin-bottom:16px;">'+
+      groupOrder.filter(function(g){ return regionGroups[g].count>0; }).map(function(g){
+        var rg = regionGroups[g];
+        var pct = rg.target>0 ? (rg.actual/rg.target*100) : 0;
+        var variance = rg.actual - rg.expected;
+        return kpiCard(g+' — '+rg.count+' مخزن', fmtMoney(rg.actual)+' ج.م', 'من تارجت '+fmtMoney(rg.target)+' ج.م ('+pct.toFixed(0)+'%)', variance>=0?'accent-green pos':'accent-red neg');
+      }).join('')+
+    '</div>';
+
+    var html = regionCardsHtml + '<div class="table-wrap"><div class="sheet-scroll"><table class="sheet" style="min-width:1150px;"><thead><tr>'+
+      '<th class="col-name">المخزن</th><th>التارجت الشهري</th><th>المفروض لحد النهاردة</th><th>المحقق فعليًا</th>'+
+      '<th>الفرق</th><th>التارجت المعدّل النهاردة</th><th>سيلز</th><th>أون جراوند</th><th>تطبيق</th>'+
+      '<th>مسار الشهر</th><th>نسبة الإنجاز</th><th>المتوقع عند قفل الشهر</th><th></th>'+
+    '</tr></thead><tbody>';
+    rows.forEach(function(row,ri){
+      var s = row.s;
+      var st = statusForPct(s.pct);
+      var expectedPctOfMonth = s.wdTotal>0 ? (s.wdElapsed/s.wdTotal*100) : 0;
+      var actualFillPct = clamp(s.monthPct,0,100);
+      var projPct = s.target>0 ? (s.projected/s.target*100) : 0;
+      var isFri = isFriday(y,m,day);
+      html += '<tr>'+
+        '<td class="col-name">'+escapeHtml(row.wh.name)+'</td>'+
+        '<td class="num" style="text-align:center;">'+fmtMoney(s.target)+'</td>'+
+        '<td class="num" style="text-align:center;">'+fmtMoney(s.expectedToDate)+'</td>'+
+        '<td class="num" style="text-align:center;">'+fmtMoney(s.actualToDate)+'</td>'+
+        '<td class="num pct '+(s.variance>=0?'green':'red')+'" style="text-align:center;">'+(s.variance>=0?'+':'−')+fmtMoney(Math.abs(s.variance))+'</td>'+
+        '<td class="num" style="color:var(--gold);font-weight:700;text-align:center;">'+(isFri?'—':fmtMoney(row.adjToday))+'</td>'+
+        '<td class="num" style="text-align:center;color:var(--blue);">'+fmtMoney(row.channels['سيلز (تليسيلز)']||0)+'</td>'+
+        '<td class="num" style="text-align:center;color:var(--purple);">'+fmtMoney(row.channels['أون جراوند']||0)+'</td>'+
+        '<td class="num" style="text-align:center;color:var(--pink);">'+fmtMoney(row.channels['التطبيق (بدون مندوب)']||0)+'</td>'+
+        '<td><div class="track">'+
+          '<div class="track-fill '+(s.variance>=0?'green':'red')+'" style="width:'+actualFillPct+'%;"></div>'+
+          '<div class="track-marker" style="right:'+clamp(expectedPctOfMonth,0,100)+'%;"></div>'+
+        '</div></td>'+
+        '<td class="pct '+st+'" style="text-align:center;">'+s.monthPct.toFixed(0)+'%</td>'+
+        '<td class="num pct '+statusForPct(projPct)+'" style="font-size:12.5px;text-align:center;">'+fmtMoney(s.projected)+' ('+projPct.toFixed(0)+'%)</td>'+
+        '<td><button class="icon-btn wh-drill-btn" data-idx="'+ri+'" title="مين حقق ده؟">≡</button></td>'+
+      '</tr>';
+    });
+    html += '</tbody></table></div></div>'+
+      '<div class="sheet-legend">المتوقع عند قفل الشهر = تقدير تقريبي بناء على معدل الأداء الحالي لو استمر بنفس الوتيرة لحد آخر الشهر. أعمدة سيلز/أون جراوند/تطبيق = تراكمي من أول الشهر لحد النهاردة. اضغط ≡ لمعرفة مين المناديب اللي حققوا جوه المخزن ده.</div>';
+    container.innerHTML = html;
+
+    document.querySelectorAll('.wh-drill-btn').forEach(function(b){
+      b.addEventListener('click', function(){
+        var idx = Number(b.getAttribute('data-idx'));
+        openDimBreakdownModal('warehouse', rows[idx].wh.name, 'المخزن', y, m, day, 'month');
+      });
+    });
+  }
+
+  function renderWarehouseManage(container, y, m, day){
+    var rows = state.warehouses.filter(function(w){ return w.name.toLowerCase().indexOf(state.searchWh.toLowerCase())>-1; });
+
+    if(!state.isAdmin){
+      var vhtml2 = '<div style="text-align:left;margin-bottom:14px;color:var(--text-faint);font-size:12px;">👁 وضع العرض فقط — سجّل دخول كأدمن للتعديل</div>';
+      if(state.warehouses.length===0){
+        vhtml2 += emptyState('مفيش مخازن مسجلة لسه', '');
+      } else if(rows.length===0){
+        vhtml2 += emptyState('مفيش نتائج', 'جرب اسم تاني في البحث.');
+      } else {
+        vhtml2 += '<div class="table-wrap"><table><thead><tr><th>اسم المخزن</th><th>التارجت الشهري</th><th>التارجت اليومي (متوسط أيام العمل)</th></tr></thead><tbody>';
+        rows.forEach(function(wh){
+          var avg = originalDailyTargetGeneric(wh.monthlyTarget, y, m);
+          vhtml2 += '<tr><td class="rep-name">'+escapeHtml(wh.name)+'</td><td class="num">'+fmtMoney(wh.monthlyTarget)+' ج.م</td><td class="num">'+fmtMoney(avg)+' ج.م</td></tr>';
+        });
+        vhtml2 += '</tbody></table></div>';
+      }
+      container.innerHTML = vhtml2;
+      return;
+    }
+
+    var html = '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px;">'+
+      '<button class="btn secondary" id="downloadWhTemplateBtn">تنزيل قالب فاضي</button>'+
+      '<button class="btn secondary" id="importWhBtn">↑ رفع شيت المخازن والتارجت</button>'+
+      '<button class="btn" id="addWhBtn">+ إضافة مخزن</button>'+
+    '</div>';
+
+    if(state.warehouses.length===0){
+      html += emptyState('ابدأ بإضافة المخازن', 'حدد اسم كل مخزن وتارجته الشهري، أو ارفع شيت فيه اسم المخزن والتارجت مرة واحدة.');
+    } else if(rows.length===0){
+      html += emptyState('مفيش نتائج', 'جرب اسم تاني في البحث.');
+    } else {
+      html += '<div class="table-wrap"><table><thead><tr>'+
+        '<th>اسم المخزن</th><th>التارجت الشهري</th><th>التارجت اليومي (متوسط أيام العمل)</th><th></th>'+
+      '</tr></thead><tbody>';
+      rows.forEach(function(wh){
+        var avg = originalDailyTargetGeneric(wh.monthlyTarget, y, m);
+        html += '<tr>'+
+          '<td class="rep-name">'+escapeHtml(wh.name)+'</td>'+
+          '<td class="num">'+fmtMoney(wh.monthlyTarget)+' ج.م</td>'+
+          '<td class="num">'+fmtMoney(avg)+' ج.م</td>'+
+          '<td><div class="rep-row-actions">'+
+            '<button class="icon-btn edit-wh" data-id="'+wh.id+'" title="تعديل">✎</button>'+
+            '<button class="icon-btn del del-wh" data-id="'+wh.id+'" title="حذف">✕</button>'+
+          '</div></td>'+
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    container.innerHTML = html;
+
+    document.getElementById('downloadWhTemplateBtn').addEventListener('click', function(){ downloadWarehouseTemplateCSV(y,m); });
+    document.getElementById('importWhBtn').addEventListener('click', function(){ openWarehouseImportModal(y,m); });
+    document.getElementById('addWhBtn').addEventListener('click', function(){ openWarehouseModal(null); });
+    document.querySelectorAll('.edit-wh').forEach(function(b){
+      b.addEventListener('click', function(){ openWarehouseModal(b.getAttribute('data-id')); });
+    });
+    document.querySelectorAll('.del-wh').forEach(function(b){
+      b.addEventListener('click', async function(){
+        var id = b.getAttribute('data-id');
+        var wh = state.warehouses.find(function(w){ return w.id===id; });
+        if(confirm('هتحذف مخزن "'+wh.name+'" نهائيًا؟')){
+          state.warehouses = state.warehouses.filter(function(w){ return w.id!==id; });
+          await saveWarehouses();
+          renderWarehousesTab(y,m,day);
+          showToast('تم الحذف');
+        }
+      });
+    });
+  }
+
+  function downloadWarehouseTemplateCSV(y,m){
+    var names = {};
+    Object.keys(state.dims).forEach(function(ymKeyStr){
+      Object.keys(state.dims[ymKeyStr]||{}).forEach(function(dKey){
+        var dObj = state.dims[ymKeyStr][dKey];
+        if(dObj && dObj.warehouses){ Object.keys(dObj.warehouses).forEach(function(n){ names[n]=true; }); }
+      });
+    });
+    state.warehouses.forEach(function(w){ names[w.name]=true; });
+    var nameList = Object.keys(names);
+    var lines = ['اسم المخزن,التارجت الشهري'];
+    if(nameList.length===0){
+      lines.push(',');
+    } else {
+      nameList.forEach(function(n){ lines.push(n+','); });
+    }
+    var csv = '\uFEFF' + lines.join('\r\n');
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'قالب-تارجت-المخازن.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    if(nameList.length===0) showToast('لسه معندناش أسماء مخازن معروفة — ارفع تقرير مبيعات الأول أو اكتب الأسماء يدوي في القالب');
+  }
+
+  function openWarehouseModal(whId){
+    var editing = whId ? state.warehouses.find(function(w){ return w.id===whId; }) : null;
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal">'+
+        '<h3>'+(editing?'تعديل بيانات المخزن':'إضافة مخزن جديد')+'</h3>'+
+        '<div class="field"><label>اسم المخزن</label><input id="whName" value="'+(editing?escapeAttr(editing.name):'')+'" placeholder="مثال: مخزن الجيزه"/></div>'+
+        '<div class="field"><label>التارجت الشهري (ج.م)</label><input id="whTarget" type="number" min="0" value="'+(editing?editing.monthlyTarget:'')+'" placeholder="مثال: 2000000"/></div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn" id="saveWhBtn">'+(editing?'حفظ التعديل':'إضافة')+'</button>'+
+          '<button class="btn secondary" id="cancelWhBtn">إلغاء</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+    document.getElementById('cancelWhBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+    document.getElementById('saveWhBtn').addEventListener('click', async function(){
+      var name = document.getElementById('whName').value.trim();
+      var target = Number(document.getElementById('whTarget').value)||0;
+      if(!name){ showToast('اكتب اسم المخزن'); return; }
+      if(editing){
+        editing.name = name; editing.monthlyTarget = target;
+      } else {
+        state.warehouses.push({id: uid(), name: name, monthlyTarget: target});
+      }
+      await saveWarehouses();
+      closeModal();
+      render();
+      showToast('تم الحفظ');
+    });
+  }
+
+  function openWarehouseImportModal(y,m){
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal">'+
+        '<h3>رفع شيت المخازن والتارجت</h3>'+
+        '<div class="field">'+
+          '<div class="hint" style="margin-bottom:10px;">الملف: عمود اسم المخزن، وعمود التارجت الشهري. لو المخزن موجود عندك هيتحدث تارجته، ولو مش موجود هيتضاف تلقائيًا.</div>'+
+          '<div class="file-input-wrap"><input type="file" id="whImportFile" accept=".csv,.xlsx,.xls"/></div>'+
+        '</div>'+
+        '<div id="whImportResultsBox"></div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn secondary" id="cancelWhImportBtn">إغلاق</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+    document.getElementById('cancelWhImportBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+
+    document.getElementById('whImportFile').addEventListener('change', async function(e){
+      var file = e.target.files[0];
+      if(!file) return;
+      var box = document.getElementById('whImportResultsBox');
+      box.innerHTML = '<div class="import-results">جاري القراءة...</div>';
+      try{
+        var rows = await readFileAsRows(file);
+        if(!rows || rows.length===0){ box.innerHTML = errorHtml('الملف فاضي.'); return; }
+        var startIdx = 0;
+        var firstCellNum = parseAmount(rows[0][1]);
+        if(firstCellNum===null) startIdx = 1; // treat as header row and skip it
+        var added=0, updated=0;
+        for(var r=startIdx; r<rows.length; r++){
+          var row = rows[r];
+          if(!row || !row[0] || String(row[0]).trim()==='') continue;
+          var name = String(row[0]).trim();
+          var target = parseAmount(row[1]) || 0;
+          var existing = state.warehouses.find(function(w){ return w.name.trim().toLowerCase()===name.toLowerCase(); });
+          if(existing){ existing.monthlyTarget = target; updated++; }
+          else { state.warehouses.push({id: uid(), name: name, monthlyTarget: target}); added++; }
+        }
+        await saveWarehouses();
+        box.innerHTML = '<div class="import-results"><span class="ok">تم ✓</span> — '+added+' مخزن جديد، '+updated+' مخزن اتحدث تارجته.</div>';
+        render();
+        showToast('تم استيراد شيت المخازن');
+      }catch(err){
+        box.innerHTML = errorHtml('حصل خطأ في قراءة الملف: '+(err.message||String(err)));
+      }
+    });
+  }
+
+  function renderRepsTab(){
+    if(!state.isAdmin){
+      var viewRows = state.reps.filter(function(r){ return r.name.toLowerCase().indexOf(state.searchReps.toLowerCase())>-1; });
+      var vhtml = '<div class="toolbar">'+
+        '<input class="search-input" id="searchReps" placeholder="بحث..." value="'+escapeAttr(state.searchReps)+'"/>'+
+        '<span style="color:var(--text-faint);font-size:12px;">👁 وضع العرض فقط — سجّل دخول كأدمن للتعديل</span>'+
+      '</div>';
+      if(state.reps.length===0){
+        vhtml += emptyState('مفيش مناديب مسجلين لسه', '');
+      } else if(viewRows.length===0){
+        vhtml += emptyState('مفيش نتائج', 'جرب اسم تاني في البحث.');
+      } else {
+        vhtml += '<div class="table-wrap"><table><thead><tr><th>المندوب</th><th>التارجت الشهري</th><th>التارجت اليومي (متوسط أيام العمل)</th></tr></thead><tbody>';
+        viewRows.forEach(function(rep){
+          var d = state.selectedDate;
+          var avg = originalDailyTarget(rep, d.getFullYear(), d.getMonth()+1);
+          vhtml += '<tr><td class="rep-name">'+escapeHtml(rep.name)+'</td><td class="num">'+fmtMoney(rep.monthlyTarget)+' ج.م</td><td class="num">'+fmtMoney(avg)+' ج.م</td></tr>';
+        });
+        vhtml += '</tbody></table></div>';
+      }
+      document.getElementById('tabContent').innerHTML = vhtml;
+      var sv = document.getElementById('searchReps');
+      if(sv){ sv.addEventListener('input', function(e){ state.searchReps = e.target.value; renderRepsTab(); }); sv.focus(); sv.selectionStart = sv.value.length; }
+      return;
+    }
+
+    var rows = state.reps.filter(function(r){ return r.name.toLowerCase().indexOf(state.searchReps.toLowerCase())>-1; });
+    var selectedCount = Object.keys(state.selectedRepIds).filter(function(id){ return state.selectedRepIds[id]; }).length;
+
+    var html = '<div class="toolbar">'+
+      '<input class="search-input" id="searchReps" placeholder="بحث..." value="'+escapeAttr(state.searchReps)+'"/>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        (selectedCount>0 ? '<button class="btn danger" id="bulkDeleteBtn">🗑 حذف المحدد ('+selectedCount+')</button>' : '')+
+        '<button class="btn secondary" id="downloadRepTemplateBtn">تنزيل قالب فاضي</button>'+
+        '<button class="btn secondary" id="importRepBtn">↑ رفع شيت إكسيل</button>'+
+        '<button class="btn secondary" id="bulkAddBtn">لصق نصي سريع</button>'+
+        '<button class="btn" id="addRepBtn">+ إضافة مندوب</button>'+
+      '</div>'+
+    '</div>';
+
+    if(state.reps.length===0){
+      html += emptyState('ابدأ بإضافة فريق المبيعات', 'ارفع شيت إكسيل فيه اسم كل مندوب وتارجته الشهري، أو استخدم "لصق نصي سريع"، أو ضيفهم واحد واحد.');
+    } else {
+      var allVisibleSelected = rows.length>0 && rows.every(function(r){ return state.selectedRepIds[r.id]; });
+      html += '<div class="table-wrap"><table><thead><tr>'+
+        '<th style="width:34px;"><input type="checkbox" id="selectAllReps" '+(allVisibleSelected?'checked':'')+'/></th>'+
+        '<th>المندوب</th><th>التارجت الشهري</th><th>التارجت اليومي (متوسط أيام العمل)</th><th></th>'+
+      '</tr></thead><tbody>';
+      rows.forEach(function(rep){
+        var d = state.selectedDate;
+        var avg = originalDailyTarget(rep, d.getFullYear(), d.getMonth()+1);
+        html += '<tr>'+
+          '<td><input type="checkbox" class="rep-select-cb" data-id="'+rep.id+'" '+(state.selectedRepIds[rep.id]?'checked':'')+'/></td>'+
+          '<td class="rep-name">'+escapeHtml(rep.name)+'</td>'+
+          '<td class="num">'+fmtMoney(rep.monthlyTarget)+' ج.م</td>'+
+          '<td class="num">'+fmtMoney(avg)+' ج.م</td>'+
+          '<td><div class="rep-row-actions">'+
+            '<button class="icon-btn edit" data-id="'+rep.id+'" title="تعديل">✎</button>'+
+            '<button class="icon-btn del" data-id="'+rep.id+'" title="حذف">✕</button>'+
+          '</div></td>'+
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    document.getElementById('tabContent').innerHTML = html;
+
+    var s = document.getElementById('searchReps');
+    if(s){ s.addEventListener('input', function(e){ state.searchReps = e.target.value; renderRepsTab(); }); s.focus(); s.selectionStart = s.value.length; }
+
+    document.getElementById('addRepBtn').addEventListener('click', function(){ openRepModal(null); });
+    document.getElementById('bulkAddBtn').addEventListener('click', openBulkModal);
+    document.getElementById('downloadRepTemplateBtn').addEventListener('click', downloadRepTemplateCSV);
+    document.getElementById('importRepBtn').addEventListener('click', openRepImportModal);
+
+    var selectAllCb = document.getElementById('selectAllReps');
+    if(selectAllCb){
+      selectAllCb.addEventListener('change', function(){
+        rows.forEach(function(r){ state.selectedRepIds[r.id] = selectAllCb.checked; });
+        renderRepsTab();
+      });
+    }
+    document.querySelectorAll('.rep-select-cb').forEach(function(cb){
+      cb.addEventListener('change', function(){
+        var id = cb.getAttribute('data-id');
+        if(cb.checked) state.selectedRepIds[id] = true; else delete state.selectedRepIds[id];
+        renderRepsTab();
+      });
+    });
+    var bulkDelBtn = document.getElementById('bulkDeleteBtn');
+    if(bulkDelBtn){
+      bulkDelBtn.addEventListener('click', async function(){
+        var ids = Object.keys(state.selectedRepIds).filter(function(id){ return state.selectedRepIds[id]; });
+        var names = state.reps.filter(function(r){ return ids.indexOf(r.id)>-1; }).map(function(r){ return r.name; });
+        if(!confirm('هتحذف '+ids.length+' مندوب نهائيًا: '+names.join('، ')+'؟')) return;
+        state.reps = state.reps.filter(function(r){ return ids.indexOf(r.id)===-1; });
+        state.selectedRepIds = {};
+        await saveReps();
+        render();
+        showToast('تم حذف '+ids.length+' مندوب');
+      });
+    }
+
+    document.querySelectorAll('.icon-btn.edit').forEach(function(b){
+      b.addEventListener('click', function(){ openRepModal(b.getAttribute('data-id')); });
+    });
+    document.querySelectorAll('.icon-btn.del').forEach(function(b){
+      b.addEventListener('click', async function(){
+        var id = b.getAttribute('data-id');
+        var rep = state.reps.find(function(r){ return r.id===id; });
+        if(confirm('هتحذف "'+rep.name+'" نهائيًا؟')){
+          state.reps = state.reps.filter(function(r){ return r.id!==id; });
+          delete state.selectedRepIds[id];
+          await saveReps();
+          renderRepsTab();
+          renderKPIs(state.selectedDate.getFullYear(), state.selectedDate.getMonth()+1, state.selectedDate.getDate());
+          showToast('تم الحذف');
+        }
+      });
+    });
+  }
+
+  function badge(st){
+    var labels = {green:'محقق الهدف', amber:'قريب من الهدف', red:'متأخر', off:'يوم إجازة (جمعة)'};
+    return '<span class="badge '+st+'"><span class="badge-dot"></span>'+labels[st]+'</span>';
+  }
+
+  function emptyState(big, small){
+    return '<div class="table-wrap"><div class="empty-state"><div class="big">'+big+'</div><div>'+small+'</div></div></div>';
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  // ---------------- Modals ----------------
+  function openDimBreakdownModal(dimType, dimValue, dimLabel, y, m, day, scope){
+    var fromDay = scope==='day' ? day : 1;
+    var toDay = day;
+    var scopeLabel = scope==='day' ? ('يوم '+day) : ('من أول الشهر لحد يوم '+day);
+
+    var dimTotal;
+    if(dimType==='subregion'){
+      dimTotal = scope==='day'
+        ? (aggregateDimRows('subregions', y, m, day).find(function(r){ return r.name===dimValue; }) || {today:0}).today
+        : (aggregateDimRows('subregions', y, m, day).find(function(r){ return r.name===dimValue; }) || {month:0}).month;
+    } else {
+      var filters = {};
+      filters[dimType] = dimValue;
+      dimTotal = queryCross(y, m, fromDay, toDay, filters, null).total;
+    }
+
+    var repRows = repBreakdownForDim(dimType, dimValue, y, m, fromDay, toDay);
+    var repSum = repRows.reduce(function(s,r){ return s+r.amount; }, 0);
+    var unassigned = Math.max(0, dimTotal - repSum);
+
+    var rowsHtml = repRows.length===0 && unassigned<=0
+      ? '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:13px;">مفيش بيانات مسجلة في الفترة دي</div>'
+      : ('<table style="width:100%;font-size:12.5px;"><thead><tr>'+
+          '<th style="text-align:right;padding:6px 4px;color:var(--text-dim);">المندوب</th>'+
+          '<th style="text-align:right;padding:6px 4px;color:var(--text-dim);">القناة</th>'+
+          '<th style="text-align:right;padding:6px 4px;color:var(--text-dim);">عدد الفواتير</th>'+
+          '<th style="text-align:left;padding:6px 4px;color:var(--text-dim);">المبلغ</th>'+
+          '<th style="text-align:left;padding:6px 4px;color:var(--text-dim);">% من الإجمالي</th>'+
+        '</tr></thead><tbody>'+
+        repRows.map(function(r){
+          var pct = dimTotal>0 ? (r.amount/dimTotal*100) : 0;
+          return '<tr style="border-top:1px solid var(--border);">'+
+            '<td class="rep-name" style="padding:6px 4px;">'+escapeHtml(r.name)+'</td>'+
+            '<td style="padding:6px 4px;color:var(--text-dim);">'+escapeHtml(r.channels.join('، ')||'—')+'</td>'+
+            '<td class="num" style="padding:6px 4px;">'+r.count+'</td>'+
+            '<td class="num" style="padding:6px 4px;text-align:left;">'+fmtMoney(r.amount)+' ج.م</td>'+
+            '<td class="num" style="padding:6px 4px;text-align:left;color:var(--text-dim);">'+pct.toFixed(1)+'%</td>'+
+          '</tr>';
+        }).join('')+
+        (unassigned>0 ? (
+          '<tr style="border-top:1px solid var(--border);background:rgba(255,122,184,.06);">'+
+            '<td class="rep-name" style="padding:6px 4px;color:var(--pink);">بدون مندوب مطابق (تطبيق / أخرى)</td>'+
+            '<td style="padding:6px 4px;color:var(--text-dim);">تطبيق</td>'+
+            '<td class="num" style="padding:6px 4px;">—</td>'+
+            '<td class="num" style="padding:6px 4px;text-align:left;">'+fmtMoney(unassigned)+' ج.م</td>'+
+            '<td class="num" style="padding:6px 4px;text-align:left;color:var(--text-dim);">'+(dimTotal>0?(unassigned/dimTotal*100).toFixed(1):'0')+'%</td>'+
+          '</tr>'
+        ) : '')+
+        '</tbody></table>');
+
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal" style="max-width:560px;">'+
+        '<h3>تفصيل '+escapeHtml(dimLabel)+': '+escapeHtml(dimValue)+' — '+scopeLabel+'</h3>'+
+        '<div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;color:var(--text-dim);flex-wrap:wrap;">'+
+          '<div><b style="color:var(--gold);">'+fmtMoney(dimTotal)+' ج.م</b> إجمالي المحقق</div>'+
+          '<div><b style="color:var(--text);">'+repRows.length+'</b> مندوب ساهم</div>'+
+        '</div>'+
+        '<div style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">'+rowsHtml+'</div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn secondary" id="closeDimBtn">إغلاق</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+    document.getElementById('closeDimBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+  }
+
+  function openRepOrdersModal(repId, y, m, day, scope){
+    var rep = state.reps.find(function(r){ return r.id===repId; });
+    if(!rep) return;
+    var list = scope==='day' ? repOrdersForDay(repId,y,m,day) : repOrdersToDate(repId,y,m,day);
+    list = list.slice().sort(function(a,b){ return (a.t||'').localeCompare(b.t||''); });
+    var s = summarizeOrders(list);
+    var scopeLabel = scope==='day' ? ('يوم '+day) : ('من أول الشهر لحد يوم '+day);
+
+    var rowsHtml = list.length===0
+      ? '<div style="padding:16px;text-align:center;color:var(--text-faint);font-size:13px;">مفيش فواتير مسجلة في الفترة دي — لو دي بيانات يوم قديم اتضاف من قبل ما نضيف تتبع الفواتير، ارفع نفس تقرير اليوم ده تاني عشان يتسجل بالتفصيل.</div>'
+      : ('<table style="width:100%;font-size:12.5px;"><thead><tr>'+
+          (scope==='day' ? '<th style="text-align:right;padding:6px 4px;color:var(--text-dim);">الوقت</th>' : '')+
+          '<th style="text-align:right;padding:6px 4px;color:var(--text-dim);">رقم الفاتورة</th>'+
+          '<th style="text-align:right;padding:6px 4px;color:var(--text-dim);">كود العميل</th>'+
+          '<th style="text-align:left;padding:6px 4px;color:var(--text-dim);">المبلغ</th>'+
+        '</tr></thead><tbody>'+
+        list.map(function(o){
+          return '<tr style="border-top:1px solid var(--border);">'+
+            (scope==='day' ? '<td class="num" style="padding:6px 4px;color:var(--gold);">'+escapeHtml(o.t||'—')+'</td>' : '')+
+            '<td class="num" style="padding:6px 4px;">'+escapeHtml(o.o||'—')+'</td>'+
+            '<td class="num" style="padding:6px 4px;">'+escapeHtml(o.c||'—')+'</td>'+
+            '<td class="num" style="padding:6px 4px;text-align:left;">'+fmtMoney(o.a)+' ج.م</td>'+
+          '</tr>';
+        }).join('')+
+        '</tbody></table>');
+
+    var hourlyHtml = '';
+    if(scope==='day' && list.length>0){
+      var buckets = {};
+      list.forEach(function(o){ var h=(o.t||'').split(':')[0]; if(h) buckets[h]=(buckets[h]||0)+1; });
+      var hours = Object.keys(buckets).sort();
+      hourlyHtml = '<div style="margin-bottom:12px;font-size:11.5px;color:var(--text-faint);">'+
+        'توزيع الفواتير على الساعات: '+
+        hours.map(function(h){ return '<span style="color:var(--text-dim);">الساعة '+h+': '+buckets[h]+'</span>'; }).join(' · ')+
+      '</div>';
+    }
+
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal" style="max-width:480px;">'+
+        '<h3>فواتير '+escapeHtml(rep.name)+' — '+scopeLabel+'</h3>'+
+        '<div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;color:var(--text-dim);">'+
+          '<div><b style="color:var(--text);">'+s.invoiceCount+'</b> فاتورة</div>'+
+          '<div><b style="color:var(--text);">'+s.customerCount+'</b> عميل</div>'+
+          '<div><b style="color:var(--gold);">'+fmtMoney(s.total)+' ج.م</b> إجمالي</div>'+
+        '</div>'+
+        hourlyHtml+
+        '<div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">'+rowsHtml+'</div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn secondary" id="closeOrdersBtn">إغلاق</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+    document.getElementById('closeOrdersBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+  }
+
+  function downloadRepTemplateCSV(){
+    var lines = ['اسم المندوب,التارجت الشهري'];
+    state.reps.forEach(function(r){ lines.push(r.name+','+(r.monthlyTarget||'')); });
+    if(state.reps.length===0) lines.push(',');
+    var csv = '\uFEFF' + lines.join('\r\n');
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'قالب-المناديب-والتارجت.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function openRepImportModal(){
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal">'+
+        '<h3>رفع شيت المناديب والتارجت</h3>'+
+        '<div class="field">'+
+          '<div class="hint" style="margin-bottom:10px;">الملف: عمود اسم المندوب، وعمود التارجت الشهري. لو المندوب موجود عندك هيتحدث تارجته، ولو مش موجود هيتضاف تلقائيًا.</div>'+
+          '<div class="file-input-wrap"><input type="file" id="repImportFile" accept=".csv,.xlsx,.xls"/></div>'+
+        '</div>'+
+        '<div id="repImportResultsBox"></div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn secondary" id="cancelRepImportBtn">إغلاق</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+    document.getElementById('cancelRepImportBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+
+    document.getElementById('repImportFile').addEventListener('change', async function(e){
+      var file = e.target.files[0];
+      if(!file) return;
+      var box = document.getElementById('repImportResultsBox');
+      box.innerHTML = '<div class="import-results">جاري القراءة...</div>';
+      try{
+        var rows = await readFileAsRows(file);
+        if(!rows || rows.length===0){ box.innerHTML = errorHtml('الملف فاضي.'); return; }
+        var startIdx = 0;
+        var firstCellNum = parseAmount(rows[0][1]);
+        if(firstCellNum===null) startIdx = 1; // treat as header row and skip it
+        var added=0, updated=0, skipped=0;
+        for(var r=startIdx; r<rows.length; r++){
+          var row = rows[r];
+          if(!row || !row[0] || String(row[0]).trim()===''){ continue; }
+          var name = String(row[0]).trim();
+          var target = parseAmount(row[1]);
+          if(target===null){ skipped++; continue; }
+          var existing = state.reps.find(function(x){ return x.name.trim().toLowerCase()===name.toLowerCase(); });
+          if(existing){ existing.monthlyTarget = target; updated++; }
+          else { state.reps.push({id: uid(), name: name, monthlyTarget: target}); added++; }
+        }
+        await saveReps();
+        var summary = '<div class="import-results"><span class="ok">تم ✓</span> — '+added+' مندوب جديد، '+updated+' مندوب اتحدث تارجته.';
+        if(skipped>0) summary += '<div style="margin-top:6px;color:var(--text-faint);">'+skipped+' صف اتجاهل (اسم من غير تارجت رقمي).</div>';
+        summary += '</div>';
+        box.innerHTML = summary;
+        render();
+        showToast('تم استيراد شيت المناديب');
+      }catch(err){
+        box.innerHTML = errorHtml('حصل خطأ في قراءة الملف: '+(err.message||String(err)));
+      }
+    });
+  }
+
+  function openRepModal(repId){
+    var editing = repId ? state.reps.find(function(r){ return r.id===repId; }) : null;
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal">'+
+        '<h3>'+(editing?'تعديل بيانات المندوب':'إضافة مندوب جديد')+'</h3>'+
+        '<div class="field"><label>اسم المندوب</label><input id="repName" value="'+(editing?escapeAttr(editing.name):'')+'" placeholder="مثال: أحمد سعيد"/></div>'+
+        '<div class="field"><label>التارجت الشهري (ج.م)</label><input id="repTarget" type="number" min="0" value="'+(editing?editing.monthlyTarget:'')+'" placeholder="مثال: 150000"/></div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn" id="saveRepBtn">'+(editing?'حفظ التعديل':'إضافة')+'</button>'+
+          '<button class="btn secondary" id="cancelRepBtn">إلغاء</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+    document.getElementById('cancelRepBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+    document.getElementById('saveRepBtn').addEventListener('click', async function(){
+      var name = document.getElementById('repName').value.trim();
+      var target = Number(document.getElementById('repTarget').value)||0;
+      if(!name){ showToast('اكتب اسم المندوب'); return; }
+      if(editing){
+        editing.name = name; editing.monthlyTarget = target;
+      } else {
+        state.reps.push({id: uid(), name: name, monthlyTarget: target});
+      }
+      await saveReps();
+      closeModal();
+      renderRepsTab();
+      renderKPIs(state.selectedDate.getFullYear(), state.selectedDate.getMonth()+1, state.selectedDate.getDate());
+      showToast('تم الحفظ');
+    });
+  }
+
+  function openBulkModal(){
+    var root = document.getElementById('modalRoot');
+    root.innerHTML = '<div class="modal-overlay" id="overlay">'+
+      '<div class="modal">'+
+        '<h3>إضافة دفعة مناديب</h3>'+
+        '<div class="field">'+
+          '<label>سطر لكل مندوب، بالشكل: الاسم, التارجت الشهري</label>'+
+          '<textarea id="bulkText" placeholder="أحمد سعيد, 150000\nمنى خالد, 120000\nكريم فتحي, 180000"></textarea>'+
+          '<div class="hint">هيتم تجاهل أي سطر فاضي أو غلط في الصيغة.</div>'+
+        '</div>'+
+        '<div class="modal-actions">'+
+          '<button class="btn" id="saveBulkBtn">إضافة الكل</button>'+
+          '<button class="btn secondary" id="cancelBulkBtn">إلغاء</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+    document.getElementById('cancelBulkBtn').addEventListener('click', closeModal);
+    document.getElementById('overlay').addEventListener('click', function(e){ if(e.target.id==='overlay') closeModal(); });
+    document.getElementById('saveBulkBtn').addEventListener('click', async function(){
+      var text = document.getElementById('bulkText').value;
+      var lines = text.split('\n');
+      var added = 0;
+      lines.forEach(function(line){
+        var parts = line.split(',');
+        if(parts.length>=2){
+          var name = parts[0].trim();
+          var target = Number(parts[1].replace(/[^\d.]/g,''))||0;
+          if(name){ state.reps.push({id: uid(), name: name, monthlyTarget: target}); added++; }
+        }
+      });
+      if(added>0){
+        await saveReps();
+        showToast('تمت إضافة '+added+' مندوب');
+      } else {
+        showToast('مفيش بيانات صحيحة اتضافت');
+      }
+      closeModal();
+      renderRepsTab();
+      renderKPIs(state.selectedDate.getFullYear(), state.selectedDate.getMonth()+1, state.selectedDate.getDate());
+    });
+  }
+
+  function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
+
+  // ---------------- Init / events ----------------
+  function setupStaticEvents(){
+    document.querySelectorAll('.tab-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        state.activeTab = btn.getAttribute('data-tab');
+        render();
+      });
+    });
+
+    var dateInput = document.getElementById('dateInput');
+    dateInput.value = isoDate(state.selectedDate);
+    dateInput.addEventListener('change', async function(e){
+      if(!e.target.value) return;
+      var parts = e.target.value.split('-');
+      var newDate = new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2]));
+      state.selectedDate = newDate;
+      await loadMonth(ymKey(newDate));
+      await loadDims(ymKey(newDate));
+      await loadOrders(ymKey(newDate));
+      render();
+    });
+
+    document.getElementById('todayBtn').addEventListener('click', async function(){
+      state.selectedDate = new Date();
+      dateInput.value = isoDate(state.selectedDate);
+      await loadMonth(ymKey(state.selectedDate));
+      await loadDims(ymKey(state.selectedDate));
+      await loadOrders(ymKey(state.selectedDate));
+      render();
+    });
+  }
+
+  // Standalone storage fallback: the original version depended on Claude's window.storage.
+  // When opened directly in a browser, use localStorage instead so the dashboard remains fully usable.
+  function ensureStorageAdapter(){
+    if(window.storage && typeof window.storage.get === 'function' && typeof window.storage.set === 'function') return;
+    window.storage = {
+      async get(key){
+        try{
+          var value = window.localStorage.getItem('masar_dashboard:'+key);
+          return value===null ? null : {value:value};
+        }catch(e){ return null; }
+      },
+      async set(key,value){
+        try{
+          window.localStorage.setItem('masar_dashboard:'+key, String(value));
+          return {ok:true, value:String(value)};
+        }catch(e){
+          console.error('Storage error:',e);
+          return null;
+        }
+      },
+      async delete(key){
+        try{ window.localStorage.removeItem('masar_dashboard:'+key); return {ok:true}; }catch(e){ return null; }
+      }
+    };
+  }
+
+  async function init(){
+    ensureStorageAdapter();
+    setupStaticEvents();
+    render();
+    try{
+      await loadAll();
+      render();
+    }catch(e){
+      console.error('Initialization error:',e);
+      state.loaded = true;
+      render();
+      showToast('حصل خطأ أثناء تحميل البيانات');
+    }
+  }
+  init();
+})();
+</script>
+</html>
