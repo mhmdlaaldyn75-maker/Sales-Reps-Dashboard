@@ -2010,6 +2010,20 @@
       return {wh, s, adjToday, channels: chanQ.groups};
     }).sort(function(a,b){ return a.s.monthPct - b.s.monthPct; });
 
+    // Grand total across every warehouse currently shown (respects search/filter above)
+    var grandTotal = {target:0, actual:0, expected:0, count: rows.length};
+    rows.forEach(function(row){
+      grandTotal.target += row.s.target;
+      grandTotal.actual += row.s.actualToDate;
+      grandTotal.expected += row.s.expectedToDate;
+    });
+    var grandPct = grandTotal.target>0 ? (grandTotal.actual/grandTotal.target*100) : 0;
+    var grandVariance = grandTotal.actual - grandTotal.expected;
+    var grandLabel = (state.searchWh || state.filterWarehouse) ? 'إجمالي المخازن المعروضة — '+grandTotal.count+' مخزن' : 'إجمالي كل المخازن — '+grandTotal.count+' مخزن';
+    var totalCardHtml = '<div class="kpis" style="margin-bottom:10px;">'+
+      kpiCard(grandLabel, fmtMoney(grandTotal.actual)+' ج.م', 'من تارجت '+fmtMoney(grandTotal.target)+' ج.م ('+grandPct.toFixed(0)+'% من التارجت)', grandVariance>=0?'accent-gold pos':'accent-gold neg')+
+    '</div>';
+
     // Regional roll-up: Cairo / Giza / Delta (everything else), auto-classified from warehouse names
     var regionGroups = {};
     var groupOrder = ['القاهرة','الجيزة','الدلتا (باقي المخازن)'];
@@ -2030,7 +2044,7 @@
       }).join('')+
     '</div>';
 
-    var html = regionCardsHtml + '<div class="table-wrap"><div class="sheet-scroll"><table class="sheet" style="min-width:1150px;"><thead><tr>'+
+    var html = totalCardHtml + regionCardsHtml + '<div class="table-wrap"><div class="sheet-scroll"><table class="sheet" style="min-width:1150px;"><thead><tr>'+
       '<th class="col-name">المخزن</th><th>التارجت الشهري</th><th>المفروض لحد النهاردة</th><th>المحقق فعليًا</th>'+
       '<th>الفرق</th><th>التارجت المعدّل النهاردة</th><th>سيلز</th><th>أون جراوند</th><th>تطبيق</th>'+
       '<th>مسار الشهر</th><th>نسبة الإنجاز</th><th>المتوقع عند قفل الشهر</th><th></th>'+
