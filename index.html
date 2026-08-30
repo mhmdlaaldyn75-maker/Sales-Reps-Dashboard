@@ -177,7 +177,12 @@
   thead th{
     background:var(--surface-2);color:var(--text-dim);font-weight:700;font-size:12px;
     padding:11px 14px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;
+    cursor:pointer;user-select:none;transition:color .12s ease;
   }
+  thead th:hover{color:var(--text);}
+  thead th.sort-asc,thead th.sort-desc{color:var(--gold);}
+  thead th.sort-asc::after{content:" \25B2";font-size:9px;opacity:.85;}
+  thead th.sort-desc::after{content:" \25BC";font-size:9px;opacity:.85;}
   tbody td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle;}
   tbody tr{transition:background .12s ease;}
   tbody tr:last-child td{border-bottom:none;}
@@ -2768,6 +2773,63 @@
       await window.storage.set('embedded_version', EMBEDDED_DATA_VERSION, true);
     }catch(e){ console.error('Embedded data seeding error:', e); }
   }
+
+  // Generic click-to-sort for every table on the page (works for tables
+  // rendered now or later, since it's a single delegated listener on the
+  // document rather than something attached per-table). Clicking a header
+  // toggles ascending/descending; numbers (money, %, counts — even with
+  // "ج.م" or "," in them) sort numerically, everything else sorts as Arabic
+  // text. Add data-nosort="1" on a <table> to exclude it if ever needed.
+  function sortValueOf(cell){
+    if(!cell) return '';
+    var raw = cell.getAttribute('data-sort');
+    return raw!==null ? raw : (cell.textContent||'');
+  }
+  function sortToNumber(s){
+    if(s===null || s===undefined) return NaN;
+    var str = String(s).trim().replace(/[,٬]/g,'');
+    var m = str.match(/-?\d+(\.\d+)?/);
+    return m ? parseFloat(m[0]) : NaN;
+  }
+  document.addEventListener('click', function(e){
+    var th = e.target.closest('th');
+    if(!th) return;
+    var table = th.closest('table');
+    if(!table || table.getAttribute('data-nosort')==='1') return;
+    var thead = table.querySelector('thead');
+    if(!thead || !thead.contains(th)) return;
+    var tbody = table.querySelector('tbody');
+    if(!tbody) return;
+    var headerRow = th.parentElement;
+    var ths = Array.prototype.slice.call(headerRow.children);
+    var colIndex = ths.indexOf(th);
+    if(colIndex<0) return;
+
+    var nextDir = th.classList.contains('sort-asc') ? 'desc' : 'asc';
+    ths.forEach(function(h){ h.classList.remove('sort-asc','sort-desc'); });
+    th.classList.add(nextDir==='asc' ? 'sort-asc' : 'sort-desc');
+
+    var rows = Array.prototype.slice.call(tbody.children).filter(function(r){ return r.tagName==='TR'; });
+    if(rows.length<2) return;
+    var numericCount = 0, sampleCount = Math.min(rows.length,12);
+    for(var i=0;i<sampleCount;i++){
+      if(!isNaN(sortToNumber(sortValueOf(rows[i].children[colIndex])))) numericCount++;
+    }
+    var isNumeric = numericCount >= Math.ceil(sampleCount*0.6);
+
+    rows.sort(function(a,b){
+      var va = sortValueOf(a.children[colIndex]), vb = sortValueOf(b.children[colIndex]);
+      if(isNumeric){
+        var na = sortToNumber(va), nb = sortToNumber(vb);
+        if(isNaN(na)) na = nextDir==='asc' ? Infinity : -Infinity;
+        if(isNaN(nb)) nb = nextDir==='asc' ? Infinity : -Infinity;
+        return nextDir==='asc' ? na-nb : nb-na;
+      }
+      var sa = String(va||'').trim(), sb = String(vb||'').trim();
+      return nextDir==='asc' ? sa.localeCompare(sb,'ar') : sb.localeCompare(sa,'ar');
+    });
+    rows.forEach(function(r){ tbody.appendChild(r); });
+  });
 
   async function init(){
     ensureStorageAdapter();
