@@ -587,7 +587,7 @@
     }catch(e){ state.adminPin = null; }
     state.adminPinChecked = true;
     await loadMonth(ymKey(state.selectedDate));
-    await loadDims(ymKey(state.selectedDate));
+    await loadDimsWithPrevMonth(ymKey(state.selectedDate));
     await loadOrders(ymKey(state.selectedDate));
     state.loaded = true;
   }
@@ -664,6 +664,20 @@
     }catch(e){
       state.dims[key] = {};
     }
+  }
+
+  // regionTargetForMonth (above) needs the PREVIOUS month's dims data to compute a
+  // region's target, but every call site in the app only ever loaded dims for whichever
+  // month is currently selected — so the previous month's data was never in memory and
+  // the target always showed "لا يوجد بيانات شهر سابق" even when that data existed in
+  // storage. Every call site that loads dims for the selected month now uses this instead
+  // of loadDims() directly, so the previous month is always available for the target calc.
+  async function loadDimsWithPrevMonth(key){
+    await loadDims(key);
+    var parts = key.split('-');
+    var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+    var py = m===1 ? y-1 : y, pm = m===1 ? 12 : m-1;
+    await loadDims(py+'-'+pad2(pm));
   }
 
   async function saveDims(key){
@@ -1309,7 +1323,7 @@
     if(dateInput) dateInput.value = isoDate(state.selectedDate);
     Promise.resolve()
       .then(function(){ return loadMonth(ymKey(state.selectedDate)); })
-      .then(function(){ return loadDims(ymKey(state.selectedDate)); })
+      .then(function(){ return loadDimsWithPrevMonth(ymKey(state.selectedDate)); })
       .then(function(){ return loadOrders(ymKey(state.selectedDate)); })
       .then(function(){ render(); });
   }
@@ -3025,7 +3039,7 @@
       var newDate = new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2]));
       state.selectedDate = newDate;
       await loadMonth(ymKey(newDate));
-      await loadDims(ymKey(newDate));
+      await loadDimsWithPrevMonth(ymKey(newDate));
       await loadOrders(ymKey(newDate));
       render();
     });
@@ -3034,7 +3048,7 @@
       state.selectedDate = new Date();
       dateInput.value = isoDate(state.selectedDate);
       await loadMonth(ymKey(state.selectedDate));
-      await loadDims(ymKey(state.selectedDate));
+      await loadDimsWithPrevMonth(ymKey(state.selectedDate));
       await loadOrders(ymKey(state.selectedDate));
       render();
     });
